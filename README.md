@@ -4,13 +4,13 @@
 
 ![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
 
-![The band, expanded](docs/expanded-dark.png)
+![The band, expanded](docs/expanded-dark-aligned.png)
 
 Collapse it to a single row that still shows the time left until each limit resets:
 
 ![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-early.png)
 
-![The band, collapsed](docs/collapsed-dark.png)
+![The band, collapsed](docs/collapsed-dark-aligned.png)
 
 ## What it shows
 
