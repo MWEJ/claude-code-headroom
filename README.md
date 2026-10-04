@@ -1,5 +1,7 @@
 # Claude Code Usage Quota Mod with Auto Compact
 
+![Auto compact: 30% default](https://img.shields.io/badge/Auto%20compact-30%25%20default-22b856?style=flat-square) ![Compact: one click](https://img.shields.io/badge/Compact-one%20click-22b856?style=flat-square) ![5 Hour + Weekly: whole account](https://img.shields.io/badge/5%20Hour%20%2B%20Weekly-whole%20account-22b856?style=flat-square) ![Forecast: before reset](https://img.shields.io/badge/Forecast-before%20reset-22b856?style=flat-square) ![Works in: Desktop + Terminal](https://img.shields.io/badge/Works%20in-Desktop%20%2B%20Terminal-22b856?style=flat-square) ![License: MIT](https://img.shields.io/badge/License-MIT-22b856?style=flat-square)
+
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
 The 5 Hour and Weekly limits are **your whole Claude account's**, not just Claude Code's: they include what you use in Claude chat and Cowork too. For now, the band shows in Claude Code, in the desktop app and the terminal.
