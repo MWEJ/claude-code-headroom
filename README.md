@@ -27,6 +27,10 @@ Collapse it to a single row that still shows the time left until each limit rese
 > Turn on **Auto compact** and the band compacts your chat for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish and never interrupts one. **Each chat remembers its own setting**, on or off and its %, even after you restart the app, so a long-running chat can compact early while another stays untouched.
 >
 > Want it now? The **Compact** button runs `/compact` in one click.
+>
+> **Big context where you need it, savings everywhere else.** Because each chat keeps its own setting, you can run them differently side by side:
+> - **Building something big?** In that chat, set Auto compact higher (say 70%) or leave it off, so Claude keeps the whole picture in context. When you reach a good stopping point, compact it yourself with the **Compact** button.
+> - **Everyday chats?** One click turns Auto compact on at the 30% default. They stay lean and cheap on every reply, and your 5 Hour and Weekly limits last longer.
 
 ## What it shows
 
