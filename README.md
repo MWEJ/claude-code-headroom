@@ -1,10 +1,14 @@
-# Claude Usage Quota Mod
+# Claude Code Usage Quota Mod
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. Compact in one click, or let it compact automatically.
+
+## Expanded
 
 ![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
 
 ![The band, expanded](docs/expanded-dark-aligned.png)
+
+## Collapsed
 
 Collapse it to a single row that still shows the time left until each limit resets:
 
@@ -31,7 +35,7 @@ Collapse it to a single row that still shows the time left until each limit rese
 
 **Fits everywhere**
 - The collapsed or expanded choice is shared across all your chats.
-- Works in light and dark themes, at every chat width down to the narrowest, in the Claude desktop app's Code tab and in the terminal.
+- Works in light and dark themes, at every chat width down to the narrowest.
 - `/quota` turns the band off and on.
 
 | Light theme | Narrowest chat |
@@ -39,16 +43,25 @@ Collapse it to a single row that still shows the time left until each limit rese
 | ![Light, expanded](docs/expanded-light.png) | ![Narrow, expanded](docs/narrow-expanded.png) |
 | ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
 
+## Where it works
+
+Mods are a Claude Code feature, so the band shows wherever Claude Code draws mods:
+
+- **Claude desktop app, Code tab** (not in WSL sessions)
+- **Claude Code in a terminal**, including an editor's built-in terminal and JetBrains
+
+It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowork, or in cloud sessions. The limits it shows are your whole account's, though, so they include what you use in chat and Cowork too.
+
 ## Install
 
 You need a recent Claude Code (with mods, also called function hooks), signed in with a Claude plan (Pro or Max) for the plan limits. With an API key, the context part still works.
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-usage-quota-mod
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod
 ```
 
 ```bash
-claude plugin install claude-usage-quota@claude-usage-quota-mod
+claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
 Then open a new chat, or restart the Claude app. The band appears above the prompt.
@@ -56,11 +69,11 @@ Then open a new chat, or restart the Claude app. The band appears above the prom
 To update:
 
 ```bash
-claude plugin marketplace update claude-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod
 ```
 
 ```bash
-claude plugin update claude-usage-quota@claude-usage-quota-mod
+claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
 ## Privacy
@@ -69,16 +82,16 @@ Everything runs on your machine. The mod reads what Claude Code already has (you
 
 ## Feedback and contributing
 
-This is a first release, and I'd love to hear how it works for you. [Open an issue](https://github.com/anantraghunath/claude-usage-quota-mod/issues) for bugs, ideas, or a screenshot of something that looks off. Pull requests are welcome.
+This is a first release, and I'd love to hear how it works for you. [Open an issue](https://github.com/anantraghunath/claude-code-usage-quota-mod/issues) for bugs, ideas, or a screenshot of something that looks off. Pull requests are welcome.
 
 To work on it, clone the repo and load it straight from the folder:
 
 ```bash
-claude --plugin-dir ./claude-usage-quota-mod
+claude --plugin-dir ./claude-code-usage-quota-mod
 ```
 
 ```bash
-claude plugin test ./claude-usage-quota-mod
+claude plugin test ./claude-code-usage-quota-mod
 ```
 
 If you find it useful, a ⭐ helps other people find it.
