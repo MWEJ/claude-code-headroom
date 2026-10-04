@@ -1,4 +1,4 @@
-# Claude Code Usage Quota Mod & Auto Compact
+# Claude Code Usage Quota Mod with Auto Compact
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
