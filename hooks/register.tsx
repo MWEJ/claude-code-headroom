@@ -153,8 +153,10 @@ const isSameDay = (a: number, b: number) =>
   new Date(a).toLocaleDateString('en-US') === new Date(b).toLocaleDateString('en-US')
 
 // "the 8:40 PM reset" today, "Wednesday's reset" otherwise
+// the reset by its time when it is under a day away (an after-midnight one included),
+// else by its weekday: a time that far off would only lengthen the headline
 function resetName(t: number, now: number): string {
-  return isSameDay(t, now) ? `the ${time(t)} reset` : `${weekday(t)}'s reset`
+  return t - now < 24 * 3_600_000 ? `the ${time(t)} reset` : `${weekday(t)}'s reset`
 }
 
 function headline(list: Forecast[], now: number): { text: string; color: string } | null {
