@@ -181,6 +181,10 @@ claude plugin test ./claude-code-usage-quota-mod
 
 **If you find it useful, a ⭐ helps others find it.**
 
+## Credits
+
+Inspired by [I'm liking the new mods feature](https://www.reddit.com/r/ClaudeCode/comments/1wwjman/im_liking_the_new_mods_feature/) on r/ClaudeCode. Thanks to [u/itsxzy](https://www.reddit.com/user/itsxzy/) for sharing the original prompt that started this project.
+
 ## License
 
 [MIT](LICENSE) © 2026 Anant Raghunath
