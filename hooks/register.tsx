@@ -1058,8 +1058,12 @@ export const register: Register = on => {
     const isOneRow = width >= 72
     // the context's two figures on one line, or the free count on the next
     const isContextLine = column >= 38
-    // the question and its three answers on one line, or the answers beneath
-    const isAskLine = width >= 100
+    // the question and its three answers on one line when they fit, else the answers
+    // beneath: measured from the words themselves (the desktop draws text narrower than
+    // a cell each, as the headline's check allows), each button's chrome and the gaps
+    const ASK_LABELS = ['Now', 'After my next compact', 'Only in new chats']
+    const askWords = (ask ? `Context is already at ${ask.percent}%, past ${ask.at}%. Auto compact:`.length : 0) + ASK_LABELS.join('').length
+    const isAskLine = width >= askWords * (Svg ? 0.8 : 1) + ASK_LABELS.length * (Svg ? 3 : 4) + 3
 
     const controls = (
       <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0} flexWrap="wrap">
