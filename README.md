@@ -112,6 +112,28 @@ Update the claude-code-usage-quota plugin from its marketplace
 
 Then restart the app, or the terminal session.
 
+### Uninstalling
+
+**In the desktop app**, ask Claude in the Code tab:
+
+```text
+Uninstall the claude-code-usage-quota plugin and remove its marketplace, claude-code-usage-quota-mod
+```
+
+Then quit the Claude app fully and open it again.
+
+**In a terminal**, inside Claude Code type:
+
+```text
+/plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
+```
+
+```text
+/plugin marketplace remove claude-code-usage-quota-mod
+```
+
+Then restart the terminal session. Either way removes it from both the desktop app and the terminal. (Just want it out of sight for a while? `/quota` hides the band without uninstalling.)
+
 <details>
 <summary>From your own shell instead</summary>
 
@@ -131,6 +153,16 @@ claude plugin marketplace update claude-code-usage-quota-mod
 
 ```bash
 claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+```
+
+To uninstall:
+
+```bash
+claude plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
+```
+
+```bash
+claude plugin marketplace remove claude-code-usage-quota-mod
 ```
 
 </details>
