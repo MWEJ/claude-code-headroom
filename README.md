@@ -1,6 +1,6 @@
-# Claude Code Usage Quota Mod
+# Claude Code Usage Quota Mod & Auto Compact
 
-**Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. Compact in one click, or let it compact automatically.
+**Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
 The 5 Hour and Weekly limits are **your whole Claude account's**, not just Claude Code's: they include what you use in Claude chat and Cowork too. For now, the band shows in Claude Code, in the desktop app and the terminal.
 
