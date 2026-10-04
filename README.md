@@ -85,7 +85,7 @@ If you turn it on, or set a %, when the session is already past that point, it a
 Mods are a Claude Code feature, so the band shows wherever Claude Code draws mods:
 
 - **Claude desktop app, Code tab** (not in WSL sessions)
-- **Claude Code in a terminal**, including an editor's built-in terminal and JetBrains
+- **Claude Code in a terminal**, including an editor's built-in terminal
 
 It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowork, or in cloud sessions. The limits it shows are your whole account's, though, so they include what you use in chat and Cowork too.
 
