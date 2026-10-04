@@ -2,6 +2,8 @@
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. Compact in one click, or let it compact automatically.
 
+The 5 Hour and Weekly limits are **your whole Claude account's**, not just Claude Code's: they include what you use in Claude chat and Cowork too. For now, the band shows in Claude Code, in the desktop app and the terminal.
+
 ## Expanded
 
 ![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
@@ -61,6 +63,14 @@ Mods are a Claude Code feature, so the band shows wherever Claude Code draws mod
 - **Claude Code in a terminal**, including an editor's built-in terminal and JetBrains
 
 It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowork, or in cloud sessions. The limits it shows are your whole account's, though, so they include what you use in chat and Cowork too.
+
+In the terminal, expanded and collapsed:
+
+![The band in the terminal, expanded](docs/terminal-expanded.png)
+
+![The band in the terminal, collapsed](docs/terminal-collapsed.png)
+
+In the terminal, the ▲/▼ arrow expands and collapses the band. The `[-]` after it is Claude Code's own control and hides the band entirely; ctrl+x then ctrl+a brings it back.
 
 ## Install
 
