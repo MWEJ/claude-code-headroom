@@ -4,6 +4,8 @@
 
 The 5 Hour and Weekly limits are **your whole Claude account's**, not just Claude Code's: they include what you use in Claude chat and Cowork too. For now, the band shows in Claude Code, in the desktop app and the terminal.
 
+Type **`/quota`** to turn the band off and on.
+
 ## Expanded
 
 ![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
@@ -48,7 +50,6 @@ If you turn it on, or set a %, when the chat is already past that point, it asks
 **Fits everywhere**
 - The collapsed or expanded choice is shared across all your chats.
 - Works in light and dark themes, at every chat width down to the narrowest.
-- `/quota` turns the band off and on.
 
 | Light theme | Narrowest chat |
 | --- | --- |
