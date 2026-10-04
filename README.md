@@ -37,6 +37,8 @@ If you turn it on, or set a %, when the chat is already past that point, it asks
 
 ![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask.png)
 
+![The same question with the band collapsed](docs/auto-compact-ask-collapsed.png)
+
 - **Now** compacts this chat straight away.
 - **After my next compact** waits. Once this chat is compacted some other way (the Compact button, `/compact`, or Claude Code's own auto compact), it takes over from there and compacts at your % again.
 - **Only in new chats** leaves this chat alone for now. The setting stays on, and applies again the next time the chat is opened.
