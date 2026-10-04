@@ -3,15 +3,15 @@ import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import type { AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
 
-const snapshot = atom({ plugin: 'quota-bar', key: 'snapshot' } as const, null)
-const isOn = atom({ plugin: 'quota-bar', key: 'isOn' } as const, true)
-const isCollapsed = atom({ plugin: 'quota-bar', key: 'isCollapsed' } as const, false)
-const autoCompact = atom({ plugin: 'quota-bar', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
-const fieldTick = atom({ plugin: 'quota-bar', key: 'fieldTick' } as const, 0)
+const snapshot = atom({ plugin: 'claude-usage-quota', key: 'snapshot' } as const, null)
+const isOn = atom({ plugin: 'claude-usage-quota', key: 'isOn' } as const, true)
+const isCollapsed = atom({ plugin: 'claude-usage-quota', key: 'isCollapsed' } as const, false)
+const autoCompact = atom({ plugin: 'claude-usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
+const fieldTick = atom({ plugin: 'claude-usage-quota', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
-const fieldText = atom({ plugin: 'quota-bar', key: 'fieldText' } as const, null as string | null)
-const theme = atom({ plugin: 'quota-bar', key: 'theme' } as const, 'dark' as 'dark' | 'light')
-const autoAsk = atom({ plugin: 'quota-bar', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+const fieldText = atom({ plugin: 'claude-usage-quota', key: 'fieldText' } as const, null as string | null)
+const theme = atom({ plugin: 'claude-usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
+const autoAsk = atom({ plugin: 'claude-usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -538,7 +538,7 @@ async function calibrate($: EngineInterface): Promise<void> {
     await $.store.set('calib', next)
     lastSnapshot = ''
   } catch (error) {
-    $.ui.log(`quota-bar: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    $.ui.log(`claude-usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
   } finally {
     isCalibrating = false
   }
@@ -618,7 +618,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
       if (attempt < AUTO_TRIES) return autoCompactNow($, attempt + 1)
       isCompacting = false
       $.ui.toast(`Auto compact could not start: ${reason}`)
-      $.ui.log(`quota-bar: auto compact failed: ${reason}`, { to: 'debug' })
+      $.ui.log(`claude-usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
     }
   })
 }
@@ -819,7 +819,7 @@ async function syncTheme($: EngineInterface): Promise<void> {
       themeFile = { mtimeMs, mode }
     }
   } catch (error) {
-    if (!didLogTheme) $.ui.log(`quota-bar: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    if (!didLogTheme) $.ui.log(`claude-usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
     didLogTheme = true
     return
   }
@@ -903,7 +903,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     hadError = false
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    $.ui.status(`quota-bar: ${message.replace(/^quota-bar: /, '')}`)
+    $.ui.status(`claude-usage-quota: ${message.replace(/^claude-usage-quota: /, '')}`)
     hadError = true
   } finally {
     isRefreshing = false
@@ -917,7 +917,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'quota', description: 'Toggle the quota bar above the prompt' })
+    await $.command.register({ name: 'quota', description: 'Toggle the Claude Usage Quota band above the prompt' })
     const result = await next(e)
     try {
       calib = ((await $.store.get('calib')) as typeof calib | undefined) ?? {}
@@ -993,7 +993,7 @@ export const register: Register = on => {
     const now = !(await read($, isOn))
     await update($, isOn, () => now)
     if (now) await refresh($, 'now')
-    return { text: now ? 'Quota bar on.' : 'Quota bar off.' }
+    return { text: now ? 'Claude Usage Quota on.' : 'Claude Usage Quota off.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

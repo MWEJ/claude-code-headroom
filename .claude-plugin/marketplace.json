@@ -4,7 +4,7 @@
   "metadata": { "description": "Claude Code mods by Anant Raghunath" },
   "plugins": [
     {
-      "name": "quota-bar",
+      "name": "claude-usage-quota",
       "source": "./",
       "description": "Your Claude plan limits, a forecast of when you'll run out, and your context window, live in a band above the prompt, with one-click and automatic compacting",
       "version": "0.1.0",

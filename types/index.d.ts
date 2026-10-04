@@ -23,7 +23,7 @@ export type AutoCompact = { isOn: boolean; at: number | null }
 
 declare module 'claude-code' {
   interface PluginState {
-    'quota-bar': {
+    'claude-usage-quota': {
       snapshot: Snapshot | null
       isOn: boolean
       isCollapsed: boolean

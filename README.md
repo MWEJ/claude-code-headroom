@@ -44,7 +44,7 @@ claude plugin marketplace add anantraghunath/claude-usage-quota-mod
 ```
 
 ```bash
-claude plugin install quota-bar@claude-usage-quota-mod
+claude plugin install claude-usage-quota@claude-usage-quota-mod
 ```
 
 Then open a new chat, or restart the Claude app. The band appears above the prompt.
@@ -56,7 +56,7 @@ claude plugin marketplace update claude-usage-quota-mod
 ```
 
 ```bash
-claude plugin update quota-bar@claude-usage-quota-mod
+claude plugin update claude-usage-quota@claude-usage-quota-mod
 ```
 
 ## Privacy
