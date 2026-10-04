@@ -77,19 +77,48 @@ In the terminal, the ▲/▼ arrow expands and collapses the band. The `[-]` aft
 
 You need a recent Claude Code (with mods, also called function hooks), signed in with a Claude plan (Pro or Max) for the plan limits. With an API key, the context part still works.
 
-```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod && claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
+Open Claude Code, in the desktop app's Code tab or a terminal, and ask Claude:
+
+```text
+Install the claude-code-usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
 ```
 
-The first half tells Claude Code where the mod lives (this repo), the second installs it. In Windows PowerShell 5.1, run the two halves separately.
+Or, in a terminal, type it as one command:
 
-Then open a new chat, or restart the Claude app. The band appears above the prompt.
+```text
+/plugin install claude-code-usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
+```
+
+Then restart the Claude app, or open a new terminal session. The band appears above the prompt.
+
+To update, ask Claude:
+
+```text
+Update the claude-code-usage-quota plugin from its marketplace
+```
+
+<details>
+<summary>From your own shell instead</summary>
+
+```bash
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod
+```
+
+```bash
+claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
+```
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod && claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod
 ```
+
+```bash
+claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+```
+
+</details>
 
 ## Privacy
 
