@@ -67,23 +67,17 @@ It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowor
 You need a recent Claude Code (with mods, also called function hooks), signed in with a Claude plan (Pro or Max) for the plan limits. With an API key, the context part still works.
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod && claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
-```bash
-claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
-```
+The first half tells Claude Code where the mod lives (this repo), the second installs it. In Windows PowerShell 5.1, run the two halves separately.
 
 Then open a new chat, or restart the Claude app. The band appears above the prompt.
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod
-```
-
-```bash
-claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod && claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
 ## Privacy
