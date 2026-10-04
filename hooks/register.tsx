@@ -1048,7 +1048,10 @@ export const register: Register = on => {
     // on a row of their own beneath it
     // (the desktop's letters are narrower than its cells: about 0.8 of one)
     const CONTROLS = 40
-    const isHeadBeside = width >= (head?.text.length ?? 0) * (Svg ? 0.8 : 1) + CONTROLS
+    // the terminal draws its own hide control ([-]) over the band's top-right
+    // corner: the first row keeps clear of it
+    const HOST_HIDE = Svg ? 0 : 4
+    const isHeadBeside = width >= (head?.text.length ?? 0) * (Svg ? 0.8 : 1) + CONTROLS + HOST_HIDE
     // the windows and the context side by side, or one above the other
     const isSplit = width >= 84
     const column = isSplit ? Math.floor((width - 4) / 2) : width
@@ -1344,13 +1347,13 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {isHeadBeside ? (
-          <Box flexDirection="row" justifyContent="space-between" alignItems="center" marginBottom={gap}>
+          <Box flexDirection="row" justifyContent="space-between" alignItems="center" marginBottom={gap} paddingRight={HOST_HIDE}>
             <Box flexShrink={1}>{headText}</Box>
             {controls}
           </Box>
         ) : (
           <Box flexDirection="column" marginBottom={gap}>
-            {headText}
+            <Box paddingRight={HOST_HIDE}>{headText}</Box>
             <Box marginTop={gap}>{controls}</Box>
           </Box>
         )}
