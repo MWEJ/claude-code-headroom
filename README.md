@@ -31,7 +31,15 @@ Collapse it to a single row that still shows the time left until each limit rese
 
 **Compacting**
 - **Compact** runs `/compact` in one click.
-- **Auto compact** compacts on its own once the context reaches the % you set (default 30%, range 15–99). It never runs in the middle of a reply. It's set separately for each chat. If you set a % the chat is already past, it asks whether to compact now, after your next compact, or only in new chats.
+- **Auto compact** compacts on its own once the context reaches the % you set. It's 30% by default when you turn it on, and you can type anything from 15 to 99. It never runs in the middle of a reply, and it's set separately for each chat.
+
+If you turn it on, or set a %, when the chat is already past that point, it asks before doing anything:
+
+![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask.png)
+
+- **Now** compacts this chat straight away.
+- **After my next compact** waits. Once this chat is compacted some other way (the Compact button, `/compact`, or Claude Code's own auto compact), it takes over from there and compacts at your % again.
+- **Only in new chats** leaves this chat alone for now. The setting stays on, and applies again the next time the chat is opened.
 
 **Fits everywhere**
 - The collapsed or expanded choice is shared across all your chats.
