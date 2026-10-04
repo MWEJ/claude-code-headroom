@@ -77,25 +77,40 @@ In the terminal, the ▲/▼ arrow expands and collapses the band. The `[-]` aft
 
 You need a recent Claude Code (with mods, also called function hooks), signed in with a Claude plan (Pro or Max) for the plan limits. With an API key, the context part still works.
 
-Open Claude Code, in the desktop app's Code tab or a terminal, and ask Claude:
+### In the Claude desktop app
 
-```text
-Install the claude-code-usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
-```
+1. Open the **Code** tab and start a session (any folder works).
+2. Paste this as your message and send it:
 
-Or, in a terminal, type it as one command:
+   ```text
+   Install the claude-code-usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
+   ```
 
-```text
-/plugin install claude-code-usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
-```
+3. Claude runs the install for you. If it asks to run a `claude plugin` command, allow it.
+4. Quit the Claude app fully and open it again. The band appears above the prompt in the Code tab.
 
-Then restart the Claude app, or open a new terminal session. The band appears above the prompt.
+### In a terminal
 
-To update, ask Claude:
+1. Start Claude Code with `claude`.
+2. Type this one command:
+
+   ```text
+   /plugin install claude-code-usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
+   ```
+
+3. You'll see *Installed claude-code-usage-quota. Plugin is now active.* and the band appears above the prompt.
+
+Installing either way installs it for both: the desktop app and the terminal share the same plugins.
+
+### Updating
+
+Ask Claude, in either place:
 
 ```text
 Update the claude-code-usage-quota plugin from its marketplace
 ```
+
+Then restart the app, or the terminal session.
 
 <details>
 <summary>From your own shell instead</summary>
