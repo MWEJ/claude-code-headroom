@@ -1194,7 +1194,7 @@ export const register: Register = on => {
             f.status === 'idle'
               ? 'starts with your next message'
               : f.status === 'out'
-                ? `Limit will hit ${duration(f.resetsAt - f.runOutAt)} before reset – ${left}`
+                ? `Limit will hit in ${duration(f.runOutAt - now)} – ${left}`
                 : f.status === 'hit'
                   ? `Limit reached – ${left}`
                   : `On pace for about ${Math.round(Math.min(100, f.projected))}% by reset – ${left}`

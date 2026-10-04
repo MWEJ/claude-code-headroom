@@ -165,7 +165,7 @@ test('leads with a window that will run out', async ($, on) => {
     expect(head?.props.color).toBe('#f87171')
     // 60% in 1h, blended with the usual pace (50% a window): 40% more takes 74m,
     // 2h 46m before the reset
-    expect(await ui.find({ text: 'Limit will hit 2h 46m before reset – resets in 4h' })).toBeDefined()
+    expect(await ui.find({ text: 'Limit will hit in 1h 14m – resets in 4h' })).toBeDefined()
     await ui.unmount()
   }
 })

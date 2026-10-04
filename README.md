@@ -37,11 +37,11 @@ Collapse it to a single row that still shows the time left until each limit rese
 - The forecast starts from your usual pace, which it learns from your last few windows, and shifts to your actual pace as the window goes on. A burst of use early in a window doesn't turn it red. It also leaves out the one-off jump when a long chat is reopened and re-read.
 - Colours: a bar and its % turn amber at 75% used and red at 90%, or sooner if the forecast says you'll run out.
 
-When you're on course to run out, the headline, the bar and its % turn red, and the note says how early you'd hit the limit:
+When you're on course to run out, the headline, the bar and its % turn red, and the note says how soon you will hit the limit:
 
-![The band, expanded, on course to run out before the 5 hour reset](docs/run-out-expanded.png)
+![The band, expanded, on course to run out before the 5 hour reset](docs/run-out-expanded-v2.png)
 
-![The band, collapsed, on course to run out](docs/run-out-collapsed.png)
+![The band, collapsed, on course to run out](docs/run-out-collapsed-v2.png)
 
 **Context window**
 - The % used and the space free, as `/context` counts it, split into Messages, Tools and Other.
