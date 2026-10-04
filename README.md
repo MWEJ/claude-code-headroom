@@ -2,13 +2,13 @@
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. Compact in one click, or let it compact automatically.
 
-![The band, expanded, early in a 5 hour window](docs/expanded-dark-new-window.png)
+![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
 
 ![The band, expanded](docs/expanded-dark.png)
 
 Collapse it to a single row that still shows the time left until each limit resets:
 
-![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-new-window.png)
+![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-early.png)
 
 ![The band, collapsed](docs/collapsed-dark.png)
 
