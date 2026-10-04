@@ -10,13 +10,13 @@ Type **`/quota`** to turn the band off and on.
 
 ## Expanded
 
-![The band, expanded](docs/expanded-dark-aligned.png)
+![The band, expanded, above the prompt in the Claude desktop app](docs/expanded-desktop.png)
 
 ## Collapsed
 
 One row that still shows the time left until each limit resets:
 
-![The band, collapsed](docs/collapsed-dark-aligned.png)
+![The band, collapsed, above the prompt in the Claude desktop app](docs/collapsed-desktop.png)
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
