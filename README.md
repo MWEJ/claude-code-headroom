@@ -24,7 +24,7 @@ Collapse it to a single row that still shows the time left until each limit rese
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
-> Turn on **Auto compact** and the band compacts your chat for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish, never interrupts one, and is set separately for each chat.
+> Turn on **Auto compact** and the band compacts your chat for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish and never interrupts one. **Each chat remembers its own setting**, on or off and its %, even after you restart the app, so a long-running chat can compact early while another stays untouched.
 >
 > Want it now? The **Compact** button runs `/compact` in one click.
 
@@ -55,7 +55,7 @@ The same for the Weekly limit:
 
 **Compacting**
 - **Compact** runs `/compact` in one click.
-- **Auto compact** compacts on its own once the context reaches the % you set. It's 30% by default when you turn it on, and you can type anything from 15 to 99. It never runs in the middle of a reply, and it's set separately for each chat.
+- **Auto compact** compacts on its own once the context reaches the % you set. It's 30% by default when you turn it on, and you can type anything from 15 to 99. It never runs in the middle of a reply. Each chat keeps its own setting (on or off, and its %), saved for that chat and still there when you reopen it or restart the app. A new chat starts with it off.
 
 If you turn it on, or set a %, when the chat is already past that point, it asks before doing anything:
 
