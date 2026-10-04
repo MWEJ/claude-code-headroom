@@ -39,6 +39,8 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 ![The band, expanded, on course to run out before the 5 hour reset](docs/run-out-expanded-v2.png)
 
+![The band, collapsed, on course to run out](docs/run-out-collapsed-v2.png)
+
 **Context window**
 - The % used and space free, as `/context` counts it, split into Messages, Tools and Other.
 - **Amber at 50%**, **red at 80%**: the point to compact.
@@ -51,6 +53,8 @@ If the session is already past your % when you turn it on, it asks first:
 
 ![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask.png)
 
+![The same question with the band collapsed](docs/auto-compact-ask-collapsed.png)
+
 - **Now** compacts straight away.
 - **After my next compact** waits until the session is compacted some other way (Compact, `/compact`, or Claude Code's own), then takes over.
 - **Only in new chats** leaves this session alone until it's next opened.
@@ -58,7 +62,7 @@ If the session is already past your % when you turn it on, it asks first:
 Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
 
 <details>
-<summary>More screenshots</summary>
+<summary><h3>MORE SCREENSHOTS</h3></summary>
 
 Early in a 5 hour window:
 
@@ -66,17 +70,11 @@ Early in a 5 hour window:
 
 ![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-early.png)
 
-Running out, collapsed, and the same for the Weekly limit:
-
-![The band, collapsed, on course to run out](docs/run-out-collapsed-v2.png)
+Running out on the Weekly limit:
 
 ![The band, expanded, on course to run out before the weekly reset](docs/run-out-weekly-expanded.png)
 
 ![The band, collapsed, on course to run out before the weekly reset](docs/run-out-weekly-collapsed.png)
-
-Auto compact asking, collapsed:
-
-![The same question with the band collapsed](docs/auto-compact-ask-collapsed.png)
 
 | Light theme | Narrowest window |
 | --- | --- |
