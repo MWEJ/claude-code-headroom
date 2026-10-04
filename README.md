@@ -35,7 +35,6 @@ Collapse it to a single row that still shows the time left until each limit rese
 - A forecast of where you'll be at reset, as a grey tick on the bar and a note: *On pace for about 87% by reset – resets in 23m*.
 - A headline that tells you at a glance: *On track. You should reach Wednesday's reset with room to spare.* or *At this pace you'll run out before the 8:40 PM reset.*
 - The forecast starts from your usual pace, which it learns from your last few windows, and shifts to your actual pace as the window goes on. A burst of use early in a window doesn't turn it red. It also leaves out the one-off jump when a long chat is reopened and re-read.
-
 - Colours: a bar and its % turn amber at 75% used and red at 90%, or sooner if the forecast says you'll run out.
 
 When you're on course to run out, the headline, the bar and its % turn red, and the note says how early you'd hit the limit:
