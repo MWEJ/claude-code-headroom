@@ -24,13 +24,13 @@ Collapse it to a single row that still shows the time left until each limit rese
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
-> Turn on **Auto compact** and the band compacts your chat for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish and never interrupts one. **Each chat remembers its own setting**, on or off and its %, even after you restart the app, so a long-running chat can compact early while another stays untouched.
+> Turn on **Auto compact** and the band compacts your session for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish and never interrupts one. **Each session remembers its own setting**, on or off and its %, even after you restart the app, so a long-running session can compact early while another stays untouched.
 >
 > Want it now? The **Compact** button runs `/compact` in one click.
 >
-> **Big context where you need it, savings everywhere else.** Because each chat keeps its own setting, you can run them differently side by side:
-> - **Building something big?** In that chat, set Auto compact higher (say 70%) or leave it off, so Claude keeps the whole picture in context. When you reach a good stopping point, compact it yourself with the **Compact** button.
-> - **Everyday chats?** One click turns Auto compact on at the 30% default. They stay lean and cheap on every reply, and your 5 Hour and Weekly limits last longer.
+> **Big context where you need it, savings everywhere else.** Because each session keeps its own setting, you can run them differently side by side:
+> - **Building something big?** In that session, set Auto compact higher (say 70%) or leave it off, so Claude keeps the whole picture in context. When you reach a good stopping point, compact it yourself with the **Compact** button. (With it off, Claude Code's own auto compact still steps in when the context is nearly full; the mod doesn't change that.)
+> - **Everyday sessions?** One click turns Auto compact on at the 30% default. They stay lean and cheap on every reply, and your 5 Hour and Weekly limits last longer.
 
 ## What it shows
 
@@ -38,7 +38,7 @@ Collapse it to a single row that still shows the time left until each limit rese
 - The % used, matching the app's own *Plan usage limits* panel.
 - A forecast of where you'll be at reset, as a grey tick on the bar and a note: *On pace for about 87% by reset – resets in 23m*.
 - A headline that tells you at a glance: *On track. You should reach Wednesday's reset with room to spare.* or *At this pace you'll run out before the 8:40 PM reset.*
-- The forecast starts from your usual pace, which it learns from your last few windows, and shifts to your actual pace as the window goes on. A burst of use early in a window doesn't turn it red. It also leaves out the one-off jump when a long chat is reopened and re-read.
+- The forecast starts from your usual pace, which it learns from your last few windows, and shifts to your actual pace as the window goes on. A burst of use early in a window doesn't turn it red. It also leaves out the one-off jump when a long session is reopened and re-read.
 - Colours: a bar and its % turn amber at 75% used and red at 90%, or sooner if the forecast says you'll run out.
 
 When you're on course to run out, the headline, the bar and its % turn red, and the note says how soon you will hit the limit:
@@ -59,23 +59,23 @@ The same for the Weekly limit:
 
 **Compacting**
 - **Compact** runs `/compact` in one click.
-- **Auto compact** compacts on its own once the context reaches the % you set. It's 30% by default when you turn it on, and you can type anything from 15 to 99. It never runs in the middle of a reply. Each chat keeps its own setting (on or off, and its %), saved for that chat and still there when you reopen it or restart the app. A new chat starts with it off.
+- **Auto compact** compacts on its own once the context reaches the % you set. It's 30% by default when you turn it on, and you can type anything from 15 to 99. It never runs in the middle of a reply. Each session keeps its own setting (on or off, and its %), saved for that session and still there when you reopen it or restart the app. A new session starts with it off.
 
-If you turn it on, or set a %, when the chat is already past that point, it asks before doing anything:
+If you turn it on, or set a %, when the session is already past that point, it asks before doing anything:
 
 ![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask.png)
 
 ![The same question with the band collapsed](docs/auto-compact-ask-collapsed.png)
 
-- **Now** compacts this chat straight away.
-- **After my next compact** waits. Once this chat is compacted some other way (the Compact button, `/compact`, or Claude Code's own auto compact), it takes over from there and compacts at your % again.
-- **Only in new chats** leaves this chat alone for now. The setting stays on, and applies again the next time the chat is opened.
+- **Now** compacts this session straight away.
+- **After my next compact** waits. Once this session is compacted some other way (the Compact button, `/compact`, or Claude Code's own auto compact), it takes over from there and compacts at your % again.
+- **Only in new chats** leaves this session alone for now. The setting stays on, and applies again the next time the session is opened.
 
 **Fits everywhere**
-- The collapsed or expanded choice is shared across all your chats.
-- Works in light and dark themes, at every chat width down to the narrowest.
+- The collapsed or expanded choice is shared across all your sessions.
+- Works in light and dark themes, at every window width down to the narrowest.
 
-| Light theme | Narrowest chat |
+| Light theme | Narrowest window |
 | --- | --- |
 | ![Light, expanded](docs/expanded-light.png) | ![Narrow, expanded](docs/narrow-expanded.png) |
 | ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
@@ -90,7 +90,7 @@ Mods are a Claude Code feature, so the band shows wherever Claude Code draws mod
 It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowork, or in cloud sessions. The limits it shows are your whole account's, though, so they include what you use in chat and Cowork too.
 
 > [!NOTE]
-> In the desktop app, the band shows once a chat has started. On a brand-new chat screen (the *Welcome back* page with an empty prompt box) there's no Claude Code session yet, so no mod can draw there. Send your first message, or open an existing chat, and the band appears straight away.
+> In the desktop app, the band shows once a session has started. On a brand-new session screen (the *Welcome back* page with an empty prompt box) there's no Claude Code session yet, so no mod can draw there. Send your first message, or open an existing session, and the band appears straight away.
 
 In the terminal, expanded and collapsed:
 
