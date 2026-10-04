@@ -20,11 +20,11 @@ One row that still shows the time left until each limit resets:
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
-> The band compacts your session once the context reaches **30%** (the default; set **15 to 99**). A long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. It never interrupts a reply. Want it now? **Compact** runs `/compact` in one click.
+> With Auto compact on, the band compacts your session once the context reaches **30%** (the default; set **15 to 99**). A long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact** button runs `/compact` in one click.
 >
-> **Each session keeps its own setting**, even after a restart, so you can run them differently side by side:
-> - **Building something big?** Set it higher (say 70%) or leave it off, so Claude keeps the whole picture. Compact by hand at a good stopping point. (With it off, Claude Code's own auto compact still steps in when the context is nearly full.)
-> - **Everyday sessions?** One click turns it on at 30%. They stay lean, and your 5 Hour and Weekly limits last longer.
+> **Each session keeps its own Auto compact setting**, even after a restart, so you can run them differently side by side:
+> - **Building something big?** Set Auto compact higher (say 70%) or turn it off, so Claude keeps the whole picture. Press **Compact** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
+> - **Everyday sessions?** One click turns Auto compact on at 30%. They stay lean, and your 5 Hour and Weekly limits last longer.
 
 ## What it shows
 
