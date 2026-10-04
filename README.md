@@ -20,6 +20,12 @@ Collapse it to a single row that still shows the time left until each limit rese
 
 ![The band, collapsed](docs/collapsed-dark-aligned.png)
 
+> [!TIP]
+> **Never hit a full context again: Auto compact, on by one click.**
+> Turn on **Auto compact** and the band compacts your chat for you once the context reaches **30%** (the default; set anything from 15 to 99). A long context costs more on every reply, so compacting early keeps each reply cheaper and your limits lasting longer. It waits for a reply to finish, never interrupts one, and is set separately for each chat.
+>
+> Want it now? The **Compact** button runs `/compact` in one click.
+
 ## What it shows
 
 **Plan usage limits** (5 Hour and Weekly)
@@ -64,6 +70,9 @@ Mods are a Claude Code feature, so the band shows wherever Claude Code draws mod
 - **Claude Code in a terminal**, including an editor's built-in terminal and JetBrains
 
 It doesn't appear in the VS Code extension's chat panel, in Claude chat or Cowork, or in cloud sessions. The limits it shows are your whole account's, though, so they include what you use in chat and Cowork too.
+
+> [!NOTE]
+> In the desktop app, the band shows once a chat has started. On a brand-new chat screen (the *Welcome back* page with an empty prompt box) there's no Claude Code session yet, so no mod can draw there. Send your first message, or open an existing chat, and the band appears straight away.
 
 In the terminal, expanded and collapsed:
 
