@@ -117,7 +117,7 @@ Then restart the app, or the terminal session.
 **In the desktop app**, ask Claude in the Code tab:
 
 ```text
-Uninstall the claude-code-usage-quota plugin and remove its marketplace, claude-code-usage-quota-mod
+Remove the claude-code-usage-quota-mod plugin marketplace
 ```
 
 Then quit the Claude app fully and open it again.
@@ -125,12 +125,10 @@ Then quit the Claude app fully and open it again.
 **In a terminal**, inside Claude Code type:
 
 ```text
-/plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
-```
-
-```text
 /plugin marketplace remove claude-code-usage-quota-mod
 ```
+
+Removing the marketplace uninstalls the mod with it.
 
 Then restart the terminal session. Either way removes it from both the desktop app and the terminal. (Just want it out of sight for a while? `/quota` hides the band without uninstalling.)
 
@@ -138,28 +136,16 @@ Then restart the terminal session. Either way removes it from both the desktop a
 <summary>From your own shell instead</summary>
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod
-```
-
-```bash
-claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod
-```
-
-```bash
-claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
 ```
 
 To uninstall:
-
-```bash
-claude plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
-```
 
 ```bash
 claude plugin marketplace remove claude-code-usage-quota-mod
