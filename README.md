@@ -43,6 +43,12 @@ When you're on course to run out, the headline, the bar and its % turn red, and 
 
 ![The band, collapsed, on course to run out](docs/run-out-collapsed-v2.png)
 
+The same for the Weekly limit:
+
+![The band, expanded, on course to run out before the weekly reset](docs/run-out-weekly-expanded.png)
+
+![The band, collapsed, on course to run out before the weekly reset](docs/run-out-weekly-collapsed.png)
+
 **Context window**
 - The % used and the space free, as `/context` counts it, split into Messages, Tools and Other.
 - The % turns amber at 50% and red at 80%. A long context costs more on every reply, so that's the point to compact.
