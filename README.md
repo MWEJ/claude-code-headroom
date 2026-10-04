@@ -62,7 +62,7 @@ If the session is already past your % when you turn it on, it asks first:
 Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
 
 <details>
-<summary><h3>MORE SCREENSHOTS</h3></summary>
+<summary><b>MORE SCREENSHOTS</b></summary>
 
 Early in a 5 hour window:
 
