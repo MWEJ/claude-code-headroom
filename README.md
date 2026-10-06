@@ -1,6 +1,6 @@
 # Claude Code Usage Quota Mod with Auto Compact
 
-[![Version: v0.1.3](docs/badges/version-v0.1.3.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
+[![Version: v0.1.3](docs/badges/version-v0.1.3.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 80% default](docs/badges/auto-compact-v3.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
@@ -20,11 +20,13 @@ One row that still shows the time left until each limit resets:
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
-> With Auto compact on, the band compacts your session once the context reaches **30%** (the default; set **15 to 99**). A long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact** button runs `/compact` in one click.
+> With Auto compact on, the band compacts your session once the context reaches **80%** (the default; set **15 to 99**). Set it lower to compact sooner: a long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact** button runs `/compact` in one click.
 >
-> **Each session keeps its own Auto compact setting**, even after a restart, so you can run them differently side by side:
-> - **Building something big?** Set Auto compact higher (say 70%) or turn it off, so Claude keeps the whole picture. Press **Compact** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
-> - **Everyday sessions?** One click turns Auto compact on at 30%. They stay lean, and your 5 Hour and Weekly limits last longer.
+> **Let Claude pick the moment: Agent-timed.** Switch on **Agent-timed** beside Auto compact and compaction starts sooner (from **30%** by default) but at a good moment: Claude can hold it through a debugging chain or a refactor, release it at a safe point, and leave itself a note that survives. Your Auto compact % stays the limit no hold can pass.
+>
+> **Each session keeps its own settings**, even after a restart, so you can run them differently side by side:
+> - **Building something big?** Leave Auto compact at 80% or turn it off, so Claude keeps the whole picture. Press **Compact** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
+> - **Everyday sessions?** Set Auto compact lower (say 30%), or switch on Agent-timed. They stay lean, and your 5 Hour and Weekly limits last longer.
 
 ## What it shows
 
@@ -47,7 +49,8 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 **Compacting**
 - **Compact** runs `/compact` in one click.
-- **Auto compact** runs at your % (30% by default, 15 to 99), never mid-reply. Each session keeps its own setting; a new session starts with it off.
+- **Auto compact** runs at your % (80% by default, 15 to 99), never mid-reply. Each session keeps its own setting; a new session starts with it off.
+- **Agent-timed** (optional, beside Auto compact) lets Claude choose the moment below that %. See [Agent-timed](#agent-timed).
 
 If the session is already past your % when you turn it on, it asks first:
 
@@ -82,6 +85,28 @@ Running out on the Weekly limit:
 | ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
 
 </details>
+
+## Agent-timed
+
+Auto compact fires at a fixed %, whatever Claude is doing. A compaction that lands mid-debugging throws away the context that mattered. With **Agent-timed** on, Claude chooses the moment, between two numbers you set:
+
+- From the **start %** (30% by default, its own box in the band) the session is compacted when a turn ends, unless Claude holds it.
+- At your **Auto compact %** it is compacted when the turn ends, whatever Claude holds. No hold passes it.
+
+What Claude can do, through a small `compaction` tool the mod gives it:
+
+- **Hold** compaction through fragile work, with a reason.
+- **Release** it at a safe point, or **ask to compact** when the turn ends.
+- Leave a **handoff note**. It goes to the summarizer and comes back to Claude after the compaction, once.
+
+What you see and keep:
+
+- While Claude holds, the band says so: *Held by Claude 12m: mid-refactor of auth*, with **Compact now** and **Release** to overrule it.
+- Claude is told when the context passes the start %, so a compaction never comes unannounced.
+- While subagents Claude is waiting on are still running, compaction waits for them, up to your Auto compact %.
+- Only the main agent can hold. Subagents cannot.
+
+Agent-timed is off until you switch it on, and each session keeps its own setting. Switching it on adds the tool to that session; switched off again, the tool stays listed until the session is reopened, and answers that the mode is off.
 
 ## Where it works
 
@@ -184,6 +209,8 @@ claude plugin test ./claude-code-usage-quota-mod
 ## Credits
 
 Inspired by [I'm liking the new mods feature](https://www.reddit.com/r/ClaudeCode/comments/1wwjman/im_liking_the_new_mods_feature/) on r/ClaudeCode. Thanks to [u/itsxzy](https://www.reddit.com/user/itsxzy/) for sharing the original prompt that started this project.
+
+Agent-timed is inspired by [compactor](https://github.com/rhwendt/compactor) by rhwendt (MIT), which lets the agent hold and release Claude Code's own auto-compaction.
 
 ## License
 
