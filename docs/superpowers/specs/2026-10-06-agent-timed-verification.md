@@ -155,4 +155,36 @@ this work's, either way.
 
 ## The finished mod
 
-Not yet run: the live checklist of the plan's Task 7, step 7, is the maintainer's.
+What the test kit proved, on the finished branch (Claude Code 2.1.291, the same cloud
+session): `claude plugin test .` gives **69 pass, 0 fail** across three files;
+`claude plugin validate .` fails only on the plugin's reserved name (the baseline), and lists
+the new hooks `tool.check` and `tool.call` on `mcp__claude-code-usage-quota__compaction`, the
+unmatched `tool.call`, and `session.compact`, with the calls `$.agent.list (via
+hasRunningAgents)`, `$.session.append (via tell)` and `$.tool.register (via ensureTool)`.
+The mod loads under `claude -p --plugin-dir .` (it replied `OK`).
+
+The type-check (`npx -y -p typescript@5 tsc -p . --noEmit`, against the types the load laid
+in `.claude-plugin/types/`): no error in `hooks/agent-policy.ts`, `tests/agent-policy.test.ts`
+or `tests/agent-timed.test.tsx`. The 32 errors left (2 in `hooks/register.tsx`, 30 in
+`tests/band.test.tsx`) are on `main` too, and three of `main`'s went away with this work.
+
+Only a real session proves the feature. **Not yet run**: the live checklist of the plan's
+Task 7, step 7, is the maintainer's. What they report goes here.
+
+```text
+In a terminal, from the repo:  claude --debug --plugin-dir .
+1. In the band: switch Auto compact on (it shows 80), then Agent-timed on (it shows "from 30 %").
+   Set the start % to 10.
+2. Send: Call the compaction tool with action status and tell me what it says.
+   -> the answer names the hold, the note and the three context figures. No permission prompt.
+3. Send: Call the compaction tool with action hold and reason "smoke test". Then read two large files.
+   -> the band shows "Held by Claude 0m: smoke test" with Compact now and Release.
+   -> the session is not compacted when the turn ends, though the context is past 10%.
+4. Send: Call the compaction tool with action release and note "the smoke note".
+   -> when the turn ends: a toast "Context at N%: auto compacting (Agent-timed from 10%)", then the compaction.
+5. Send: What handoff note did you leave before the compaction?
+   -> Claude quotes "the smoke note".
+6. Hold again, then press Release in the band while idle -> it compacts at once.
+7. The same in the desktop app's Code tab (add "env": { "CLAUDE_CODE_PLUGIN_DIRS": "<repo path>" } to
+   ~/.claude/settings.json, quit and reopen the app; remove it afterwards).
+```
