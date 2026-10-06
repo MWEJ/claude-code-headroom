@@ -158,7 +158,7 @@ this work's, either way.
 What the test kit proved, on the finished branch (Claude Code 2.1.291, the same cloud
 session): `claude plugin test .` gives **69 pass, 0 fail** across three files;
 `claude plugin validate .` fails only on the plugin's reserved name (the baseline), and lists
-the new hooks `tool.check` and `tool.call` on `mcp__claude-code-usage-quota__compaction`, the
+the new hooks `tool.check` and `tool.call` on the compaction tool, the
 unmatched `tool.call`, and `session.compact`, with the calls `$.agent.list (via
 hasRunningAgents)`, `$.session.append (via tell)` and `$.tool.register (via ensureTool)`.
 The mod loads under `claude -p --plugin-dir .` (it replied `OK`).
@@ -167,6 +167,30 @@ The type-check (`npx -y -p typescript@5 tsc -p . --noEmit`, against the types th
 in `.claude-plugin/types/`): no error in `hooks/agent-policy.ts`, `tests/agent-policy.test.ts`
 or `tests/agent-timed.test.tsx`. The 32 errors left (2 in `hooks/register.tsx`, 30 in
 `tests/band.test.tsx`) are on `main` too, and three of `main`'s went away with this work.
+
+Then, on the maintainer's word that no error or warning may stand, three things the plan had
+left as the baseline were fixed on the same branch:
+
+- **The plugin's name.** `claude plugin validate` refuses `claude-code-usage-quota` as
+  reserved, so the plugin is now `usage-quota` (the marketplace keeps its name,
+  `claude-code-usage-quota-mod`). With it the tool the model sees is
+  `mcp__usage-quota__compaction`, the state keys are `usage-quota.*`, and the debug-log prefix
+  is `usage-quota:`. The spec and the plan still write the old tool name; they are the
+  design as it was approved. `claude plugin validate .` now passes.
+- **The type-check.** All 32 errors (two in `hooks/register.tsx`, thirty in
+  `tests/band.test.tsx`) are gone: `tsc` exits 0. In the hooks, the `Category` literals
+  carry `as const`, and `Input` is taken from the surface's table only where it has one (the
+  phone's has none; there the % fields are left out). In the tests, the measure carries
+  `changed`, a `by()` helper types the `label` and `alt` queries the kit matches but its
+  `ElementQuery` does not name, and the field table is typed.
+- **The gating hooks' `.catch`.** Each of the five (`tool.check` and `tool.call` on the
+  compaction tool, the unmatched `tool.call`, `session.compact`, `ui.focus`) now carries one, so
+  validate lists them "with .catch" and the mod says what it does when a hook fails: the tool's
+  check still allows, the tool answers that it could not and nothing changed, and the three
+  pass-through hooks hand on `next(e)`, replay-safe.
+
+After those: `claude plugin test .` **69 pass, 0 fail**; `claude plugin validate .` passes;
+`tsc` clean; `claude -p "Reply with OK." --plugin-dir .` loads the renamed mod.
 
 Only a real session proves the feature. **Not yet run**: the live checklist of the plan's
 Task 7, step 7, is the maintainer's. What they report goes here.
