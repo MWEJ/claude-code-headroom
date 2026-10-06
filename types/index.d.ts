@@ -42,7 +42,7 @@ export type AgentTimed = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'claude-code-usage-quota': {
+    'usage-quota': {
       snapshot: Snapshot | null
       isOn: boolean
       isCollapsed: boolean

@@ -8,20 +8,20 @@ import {
 } from './agent-policy'
 import type { Stuck, ToolInput } from './agent-policy'
 
-const snapshot = atom({ plugin: 'claude-code-usage-quota', key: 'snapshot' } as const, null)
-const isOn = atom({ plugin: 'claude-code-usage-quota', key: 'isOn' } as const, true)
-const isCollapsed = atom({ plugin: 'claude-code-usage-quota', key: 'isCollapsed' } as const, false)
-const autoCompact = atom({ plugin: 'claude-code-usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
+const snapshot = atom({ plugin: 'usage-quota', key: 'snapshot' } as const, null)
+const isOn = atom({ plugin: 'usage-quota', key: 'isOn' } as const, true)
+const isCollapsed = atom({ plugin: 'usage-quota', key: 'isCollapsed' } as const, false)
+const autoCompact = atom({ plugin: 'usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
 // what Agent-timed holds for the session: the agent's hold, note and request, and what it has been told
-const agentTimed = atom({ plugin: 'claude-code-usage-quota', key: 'agentTimed' } as const, EMPTY as AgentTimed)
-const fieldTick = atom({ plugin: 'claude-code-usage-quota', key: 'fieldTick' } as const, 0)
+const agentTimed = atom({ plugin: 'usage-quota', key: 'agentTimed' } as const, EMPTY as AgentTimed)
+const fieldTick = atom({ plugin: 'usage-quota', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
-const fieldText = atom({ plugin: 'claude-code-usage-quota', key: 'fieldText' } as const, null as string | null)
+const fieldText = atom({ plugin: 'usage-quota', key: 'fieldText' } as const, null as string | null)
 // the start % field's own tick and typed text, as fieldTick and fieldText are the cap's
-const startTick = atom({ plugin: 'claude-code-usage-quota', key: 'startTick' } as const, 0)
-const startText = atom({ plugin: 'claude-code-usage-quota', key: 'startText' } as const, null as string | null)
-const theme = atom({ plugin: 'claude-code-usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
-const autoAsk = atom({ plugin: 'claude-code-usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+const startTick = atom({ plugin: 'usage-quota', key: 'startTick' } as const, 0)
+const startText = atom({ plugin: 'usage-quota', key: 'startText' } as const, null as string | null)
+const theme = atom({ plugin: 'usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
+const autoAsk = atom({ plugin: 'usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -550,7 +550,7 @@ async function calibrate($: EngineInterface): Promise<void> {
     await $.store.set('calib', next)
     lastSnapshot = ''
   } catch (error) {
-    $.ui.log(`claude-code-usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    $.ui.log(`usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
   } finally {
     isCalibrating = false
   }
@@ -597,7 +597,7 @@ async function tell($: EngineInterface, text: string): Promise<void> {
   } catch (error) {
     outcome = `not appended: ${reasonOf(error)}`
   }
-  $.ui.log(`claude-code-usage-quota: agent-timed row (${outcome}): ${text}`, { to: 'debug' })
+  $.ui.log(`usage-quota: agent-timed row (${outcome}): ${text}`, { to: 'debug' })
 }
 
 // The main agent is waiting on work whose results it must still take in. An agent list
@@ -619,7 +619,7 @@ async function ensureTool($: EngineInterface): Promise<boolean> {
     await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     isToolRegistered = true
   } catch (error) {
-    $.ui.log(`claude-code-usage-quota: the compaction tool could not be registered: ${reasonOf(error)}`, { to: 'debug' })
+    $.ui.log(`usage-quota: the compaction tool could not be registered: ${reasonOf(error)}`, { to: 'debug' })
   }
   return isToolRegistered
 }
@@ -739,7 +739,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
       if (attempt < AUTO_TRIES) return autoCompactNow($, attempt + 1)
       isCompacting = false
       $.ui.toast(`Auto compact could not start: ${reason}`)
-      $.ui.log(`claude-code-usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
+      $.ui.log(`usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
     }
   })
 }
@@ -1051,7 +1051,7 @@ async function syncTheme($: EngineInterface): Promise<void> {
       themeFile = { mtimeMs, mode }
     }
   } catch (error) {
-    if (!didLogTheme) $.ui.log(`claude-code-usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    if (!didLogTheme) $.ui.log(`usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
     didLogTheme = true
     return
   }
@@ -1107,9 +1107,9 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     if (useExact) ({ Messages: messages, Tools: tools, Other: other } = exactCount!.sums)
     const used = context.tokens ?? (useExact ? messages + tools + other : breakdown?.totalTokens ?? 0)
     const categories: Category[] = [
-      { name: 'Messages', tokens: messages, kind: 'used' },
-      { name: 'Tools', tokens: tools, kind: 'used' },
-      { name: 'Other', tokens: other, kind: 'used' },
+      { name: 'Messages', tokens: messages, kind: 'used' as const },
+      { name: 'Tools', tokens: tools, kind: 'used' as const },
+      { name: 'Other', tokens: other, kind: 'used' as const },
       ...all
         .filter(c => c.kind === 'buffer' || c.kind === 'free')
         .map(c => ({ name: c.name, tokens: c.tokens, kind: c.kind as Category['kind'] })),
@@ -1140,7 +1140,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     hadError = false
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    $.ui.status(`claude-code-usage-quota: ${message.replace(/^claude-code-usage-quota: /, '')}`)
+    $.ui.status(`usage-quota: ${message.replace(/^usage-quota: /, '')}`)
     hadError = true
   } finally {
     isRefreshing = false
@@ -1154,9 +1154,9 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
 
 export const register: Register = on => {
   // the mod's own tool: no permission prompt stands between the agent and a hold
-  on('tool.check', { tool: 'mcp__claude-code-usage-quota__compaction' }, () => ({ decision: 'allow' as const }))
+  on('tool.check', { tool: 'mcp__usage-quota__compaction' }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
 
-  on('tool.call', { tool: 'mcp__claude-code-usage-quota__compaction' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__usage-quota__compaction' }, async ($, e) => {
     const input = e as unknown as ToolInput & { agentId?: string }
     const auto = await read($, autoCompact)
     const before = await read($, agentTimed)
@@ -1170,7 +1170,7 @@ export const register: Register = on => {
     })
     if (answer.state !== before) await update($, agentTimed, () => answer.state)
     return { result: answer.text }
-  })
+  }).catch((_$, _e, next) => ({ result: `The compaction tool could not answer (${next.error.kind}). Nothing changed; call it again.` }))
 
   // what the agent is told mid-turn rides on its own tool results; a subagent's carry
   // nothing. A hook that fails here is skipped and the tool's result stands as it was
@@ -1180,7 +1180,7 @@ export const register: Register = on => {
     const isBashDone = String(e.tool) === 'Bash' && ran.isError !== true
     const lines = await linesFor($, isBashDone ? String((e as { command?: unknown }).command ?? '') : null)
     return lines.length === 0 ? ran : { ...ran, context: [...(ran.context ?? []), ...lines] }
-  })
+  }).catch((_$, e, next) => next(e))
 
   // Any compaction of the main conversation: the agent's note goes to the summarizer
   // (added once, however many places add it), and afterwards the cycle starts over.
@@ -1191,7 +1191,7 @@ export const register: Register = on => {
     const done = await next(instructions === e.instructions ? e : { ...e, instructions })
     if (done.skip === undefined) await afterCompaction($)
     return done
-  })
+  }).catch((_$, e, next) => next(e))
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'quota', description: 'Toggle the Claude Code Usage Quota band above the prompt' })
     const result = await next(e)
@@ -1229,7 +1229,7 @@ export const register: Register = on => {
     if (!e.element?.startsWith('autoAt')) await commitDraft($, 'at')
     if (!e.element?.startsWith('startAt')) await commitDraft($, 'startAt')
     return next(e)
-  })
+  }).catch((_$, e, next) => next(e))
 
   on('ui.press', { component: 'AbovePrompt' }, async ($, e, next) => {
     await commitDraft($)
@@ -1285,7 +1285,9 @@ export const register: Register = on => {
     if (!snap) return next(e)
 
     const table = $.ui.resolve(e)
-    const { Box, Text, Button, Input } = table
+    const { Box, Text, Button } = table
+    // the phone's table has no Input: there the % fields are left out
+    const Input = 'Input' in table ? table.Input : undefined
     const Svg = e.surface === 'desktop' && 'Svg' in table ? table.Svg : undefined
     usePalette(e.surface === 'desktop' && (await read($, theme)) === 'light' ? LIGHT : DARK)
     const width = Math.max(20, e.props.bodyColumns)
@@ -1375,7 +1377,7 @@ export const register: Register = on => {
         <Button key={key} label={isOn ? '●' : '○'} plain onPress={onPress} />
       )
     // a % field (3 digits) that sets itself once typing pauses; a plain % right after it
-    const fieldOf = (name: FieldName, key: string, drawn: string) => (
+    const fieldOf = (name: FieldName, key: string, drawn: string) => Input === undefined ? null : (
       <Box flexDirection="row" alignItems="center">
         {/* the field's Enter chip can't be turned off: the field is drawn wider than
             its box and the box clips the chip away */}

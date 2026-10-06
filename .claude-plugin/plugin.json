@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-usage-quota",
+  "name": "usage-quota",
   "version": "0.1.3",
   "description": "Your Claude plan limits, a forecast of when you'll run out, and your context window, live in a band above the prompt, with one-click and automatic compacting",
   "author": { "name": "Anant Raghunath", "url": "https://github.com/anantraghunath" },

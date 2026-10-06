@@ -134,13 +134,13 @@ Needs a recent Claude Code, signed in with a **Pro or Max** plan.
 **Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` command if asked, then **quit and reopen** the app:
 
 ```text
-Install the claude-code-usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
+Install the usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
 ```
 
 **Terminal:** inside `claude`, run:
 
 ```text
-/plugin install claude-code-usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
+/plugin install usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
 ```
 
 Either way installs it for **both** the desktop app and the terminal.
@@ -148,7 +148,7 @@ Either way installs it for **both** the desktop app and the terminal.
 **Update:** ask Claude, then restart:
 
 ```text
-Update the claude-code-usage-quota plugin from its marketplace
+Update the usage-quota plugin from its marketplace
 ```
 
 **Uninstall:** in the desktop app, ask Claude:
@@ -169,13 +169,13 @@ then restart. This removes it from both. Just want it out of sight? **`/quota`**
 <summary>From your own shell instead</summary>
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install usage-quota@claude-code-usage-quota-mod
 ```
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update usage-quota@claude-code-usage-quota-mod
 ```
 
 To uninstall:

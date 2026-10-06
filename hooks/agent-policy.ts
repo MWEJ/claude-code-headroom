@@ -7,7 +7,7 @@ import type { AgentTimed, AutoCompact } from '../types'
 // breakpoint patterns.
 
 export const TOOL_NAME = 'compaction'
-export const TOOL = 'mcp__claude-code-usage-quota__compaction'
+export const TOOL = 'mcp__usage-quota__compaction'
 export const TOOL_DESCRIPTION =
   'Controls when this conversation is compacted. Compaction runs when your turn ends once context passes the start %. ' +
   '"hold" (with a reason) before fragile multi-step work whose state lives only in this conversation; "release" at a safe point; ' +

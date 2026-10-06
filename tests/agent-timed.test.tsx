@@ -4,7 +4,7 @@ import type { On } from 'claude-code'
 
 const NOW = Date.parse('2026-10-04T06:00:00Z')
 const HOUR = 3_600_000
-const TOOL = 'mcp__claude-code-usage-quota__compaction'
+const TOOL = 'mcp__usage-quota__compaction'
 const START = { cwd: '.', surface: 'desktop', isInteractive: true } as const
 const TURN = { answer: 'done', durationMs: 1_000, isAborted: false, turnId: 't1', reason: 'answer' } as never
 const GO = { text: 'go', turnId: 't1' } as never
@@ -50,7 +50,7 @@ function world(on: On, percent: Percent, saved: unknown = TIMED) {
   on('tool.register', (_$, e) => {
     if (!seen.canRegister) throw new Error('the session refuses tools')
     seen.registered.push(e.name)
-    return { value: { tool: `mcp__claude-code-usage-quota__${e.name}` } }
+    return { value: { tool: `mcp__usage-quota__${e.name}` } }
   })
   on('agent.list', () => {
     if (seen.agents === null) throw new Error('the agents cannot be listed')
@@ -80,7 +80,7 @@ function world(on: On, percent: Percent, saved: unknown = TIMED) {
 
 // the rows the mod appended for the agent, as the debug log has them
 const rows = (seen: { logs: string[] }) =>
-  seen.logs.filter(l => l.startsWith('claude-code-usage-quota: agent-timed row')).map(l => l.replace(/^[^)]*\): /, ''))
+  seen.logs.filter(l => l.startsWith('usage-quota: agent-timed row')).map(l => l.replace(/^[^)]*\): /, ''))
 
 const tool = async ($: Engine, input: Record<string, unknown>) => String((await $.tool.call({ tool: TOOL, ...input } as never)).result)
 const bash = async ($: Engine, command = 'ls', agentId?: string) =>
@@ -376,7 +376,7 @@ for (const surface of SURFACES) {
     const percent = { value: 16 }
     const { seen } = world(on, percent, null)
     await $.session.start(START)
-    const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
     // auto compact off: no sign of it
     expect(await ui.find({ type: 'Text', text: /^Agent-timed/ })).toBeUndefined()
     await ui.press({ key: 'auto' })
@@ -415,7 +415,7 @@ test('the band: where the tool cannot be registered, Agent-timed says so and sta
   const { seen } = world(on, percent, { isOn: true, at: 80 })
   seen.canRegister = false
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   await ui.press({ key: 'timed' })
   expect(seen.toasts).toContain('Agent-timed could not start: its tool could not be registered')
   expect(await ui.find({ type: 'Svg', alt: 'Agent-timed off' } as never)).toBeDefined()
@@ -427,7 +427,7 @@ test('the band: switched on past the start %, it asks first', async ($, on) => {
   const percent = { value: 45 }
   const { clock, seen } = world(on, percent, { isOn: true, at: 80 })
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await ui.press({ key: 'timed' })
   expect(await ui.find({ type: 'Text', text: 'Context is already at 45%, past 30%. Auto compact:' })).toBeDefined()
   await $.turn.start(GO)
@@ -443,7 +443,7 @@ test('the band: the hold shows with who, how long and why; Release and Compact n
   const percent = { value: 20 }
   const { clock, seen } = world(on, percent)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
 
   await into($, clock, percent, 35)
   await bash($)
@@ -477,7 +477,7 @@ test('the band: the cap lowered under the context while the agent holds asks abo
   const percent = { value: 20 }
   const { clock, seen } = world(on, percent)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
 
   await into($, clock, percent, 50)
   await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
@@ -496,7 +496,7 @@ test('the band: Agent-timed switched off while the agent holds: the hold goes an
   const percent = { value: 20 }
   const { clock, seen } = world(on, percent)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
 
   await into($, clock, percent, 35)
   await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
@@ -522,7 +522,7 @@ test('the band: a narrow chat keeps every control, wrapped', async ($, on) => {
   world(on, { value: 16 })
   await $.session.start(START)
   for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface, component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 40 } })
+    const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 40 } })
     expect(await ui.find({ type: 'Text', text: 'Agent-timed from' })).toBeDefined()
     expect((await startKey(ui))?.props.value).toBe('30')
     expect(await ui.find({ key: 'compact' })).toBeDefined()
