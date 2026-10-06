@@ -598,8 +598,8 @@ test('auto compact: the switch shows the field, and it compacts between turns on
   await ui.input({ key: await fieldKey(ui), text: '100' })
   expect(ran).toEqual([])
   expect((await ui.find({ type: 'Input' }))?.props.value).toBe('99')
-  // below 15 becomes 15, each time; over 99 is 99 each time; blank is 30
-  for (const [typed, shown] of [['5', '15'], ['0', '15'], ['14', '15'], ['100', '99'], ['250', '99'], ['', '30'], ['20', '20']]) {
+  // below 15 becomes 15, each time; over 99 is 99 each time; blank is 80
+  for (const [typed, shown] of [['5', '15'], ['0', '15'], ['14', '15'], ['100', '99'], ['250', '99'], ['', '80'], ['20', '20']]) {
     await ui.input({ key: await fieldKey(ui), text: typed })
     expect((await ui.find({ type: 'Input' }))?.props.value).toBe(shown)
   }
@@ -716,8 +716,8 @@ test('"After my next compact" holds through a % flickering below, until a real c
   await ui.unmount()
 })
 
-test('auto compact is per chat: another chat opens with it off, at 30%; turned on past it, it asks and waits', async ($, on) => {
-  const percent: { value: number; isCompacted?: boolean } = { value: 35 }
+test('auto compact is per chat: another chat opens with it off, at 80%; turned on past it, it asks and waits', async ($, on) => {
+  const percent: { value: number; isCompacted?: boolean } = { value: 85 }
   const ran: string[] = []
   // another chat has it on at 20%
   const clock = startWorld(on, percent, ran, [], 'Compact now', { 'autoCompact:other': { isOn: true, at: 20 } })
@@ -729,8 +729,8 @@ test('auto compact is per chat: another chat opens with it off, at 30%; turned o
   const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   expect(await ui.find({ type: 'Svg', alt: 'Auto compact off' })).toBeDefined()
   await ui.press({ key: 'auto' })
-  expect((await ui.find({ type: 'Input' }))?.props.value).toBe('30')
-  expect(await ui.find({ type: 'Text', text: /already at 35%, past 30%/ })).toBeDefined()
+  expect((await ui.find({ type: 'Input' }))?.props.value).toBe('80')
+  expect(await ui.find({ type: 'Text', text: /already at 85%, past 80%/ })).toBeDefined()
   // left unanswered: as "after my next compact"
   await $.turn.complete(TURN)
   await clock.advance(3_000)
@@ -740,7 +740,7 @@ test('auto compact is per chat: another chat opens with it off, at 30%; turned o
   await clock.advance(3_000)
   expect(await ui.find({ type: 'Text', text: /already at/ })).toBeUndefined()
   percent.isCompacted = false
-  percent.value = 31
+  percent.value = 81
   await $.turn.complete(TURN)
   await clock.advance(1_100)
   expect(ran).toEqual(['compact'])

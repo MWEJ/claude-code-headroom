@@ -672,7 +672,7 @@ async function loadAuto($: EngineInterface): Promise<void> {
 // in. After a set the field is drawn afresh (fieldTick), which also drops its focus
 const AT_MIN = 15
 // the % whenever there is none: a blank field, a first switch-on
-const AT_DEFAULT = 30
+const AT_DEFAULT = 80
 const AT_MAX = 99
 let draftAt: string | null = null
 
