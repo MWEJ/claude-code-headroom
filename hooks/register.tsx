@@ -1,12 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
-import type { AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
+import type { AgentTimed, AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
+import {
+  AT_DEFAULT, EMPTY, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
+  afterText, answerTool, breakpointOf, breakpointText, capOf, decide, isTimed, nudgeLevel, nudgeText, startOf, stepNudge, toldText, withNote,
+} from './agent-policy'
+import type { Stuck, ToolInput } from './agent-policy'
 
 const snapshot = atom({ plugin: 'claude-code-usage-quota', key: 'snapshot' } as const, null)
 const isOn = atom({ plugin: 'claude-code-usage-quota', key: 'isOn' } as const, true)
 const isCollapsed = atom({ plugin: 'claude-code-usage-quota', key: 'isCollapsed' } as const, false)
 const autoCompact = atom({ plugin: 'claude-code-usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
+// what Agent-timed holds for the session: the agent's hold, note and request, and what it has been told
+const agentTimed = atom({ plugin: 'claude-code-usage-quota', key: 'agentTimed' } as const, EMPTY as AgentTimed)
 const fieldTick = atom({ plugin: 'claude-code-usage-quota', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
 const fieldText = atom({ plugin: 'claude-code-usage-quota', key: 'fieldText' } as const, null as string | null)
@@ -548,21 +555,124 @@ async function calibrate($: EngineInterface): Promise<void> {
   await refresh($, 'due')
 }
 
-// Auto compact fires whenever the chat is idle (no turn running) and the context
-// is at or past the %: at the end of a turn, on opening a chat, on any refresh between
-// turns. Held back only by: `waitsForCompact` (the band is asking, or the person chose
-// "after my next compact", which is also what an unanswered ask means: cleared only by
-// a real compaction, never by the % flickering below), `isStuck` (a compaction already ran and
-// the context is still past the %: it would only repeat; dropping below clears it),
-// `isNewChatsOnly` ("only in new chats"). The % is compared as the band shows it, rounded.
+// Auto compact acts whenever the chat is idle (no turn running): at the end of a turn,
+// on opening a chat, on any refresh between turns. What it does then is `decide`'s
+// (agent-policy.ts): at the cap (the %) it compacts; with Agent-timed on it also
+// compacts from the start %, unless the agent holds or its subagents still run. Paused
+// by `waitsForCompact` (the band is asking, or the person chose "after my next
+// compact", which is also what an unanswered ask means: cleared only by a real
+// compaction, never by the % flickering below) and by `isNewChatsOnly` ("only in new
+// chats"). `stuck`: a compaction already ran and the context is still past a %, so it
+// would only repeat; dropping below clears it, and stuck at the start never blocks the
+// cap. The % is compared as the band shows it, rounded.
 let waitsForCompact = false
 // a reply has been seen since the chat opened or was last compacted
 let hadReply = false
-let isStuck = false
+let stuck: Stuck = 'no'
 let isNewChatsOnly = false
 let isBusy = false
 let isCompacting = false
 let lastPercent = 0
+// one look at a time: a look waits on the engine (the agents, a row told), and the 3s
+// tick must not start a second meanwhile
+let isWatching = false
+
+// Agent-timed Auto compact, the part that touches the engine: what the agent holds for
+// the session, its tool, what it is told, and what a compaction does to all of it. The
+// decisions and the words are agent-policy.ts's; this stays in the hooks module's own
+// file because the engine follows $ only into functions declared here.
+
+const reasonOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+// A row for the agent between turns: a user-role row the person does not see as typed.
+// The debug log has every one, appended or not (a test cannot see a plugin's rows).
+async function tell($: EngineInterface, text: string): Promise<void> {
+  let outcome = 'appended'
+  try {
+    const row = await $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } })
+    if (row.deny !== undefined) outcome = `not appended: ${row.deny}`
+  } catch (error) {
+    outcome = `not appended: ${reasonOf(error)}`
+  }
+  $.ui.log(`claude-code-usage-quota: agent-timed row (${outcome}): ${text}`, { to: 'debug' })
+}
+
+// The main agent is waiting on work whose results it must still take in. An agent list
+// that cannot be read counts as none running: compaction is never held on a guess.
+async function hasRunningAgents($: EngineInterface): Promise<boolean> {
+  try {
+    return (await $.agent.list()).some(a => a.status === 'pending' || a.status === 'running' || a.status === 'waiting')
+  } catch {
+    return false
+  }
+}
+
+// the agent's tool, registered once, and only in a chat where Agent-timed is on (a tool
+// in the list rides on every request, and the API has no way to take one out again)
+let isToolRegistered = false
+async function ensureTool($: EngineInterface): Promise<boolean> {
+  if (isToolRegistered) return true
+  try {
+    await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
+    isToolRegistered = true
+  } catch (error) {
+    $.ui.log(`claude-code-usage-quota: the compaction tool could not be registered: ${reasonOf(error)}`, { to: 'debug' })
+  }
+  return isToolRegistered
+}
+
+// Three places notice a compaction of the main conversation (auto compact's own direct
+// call, the session.compact hook, the reply total going blank): the first one handles
+// it, and the others find it handled until a reply has been seen again.
+let isCompactionHandled = false
+
+// The main conversation was compacted: the cycle starts over, and the agent gets its
+// note back, and word of a hold the cap ended, once.
+async function afterCompaction($: EngineInterface): Promise<void> {
+  isCompactionHandled = true
+  const state = await read($, agentTimed)
+  await update($, agentTimed, () => EMPTY)
+  const text = afterText(state.note, state.overridden, capOf(await read($, autoCompact)))
+  if (text !== null) await tell($, text)
+}
+
+// the request to compact is spent by one attempt, and dropped when the turn it was
+// made in is interrupted
+async function dropAsked($: EngineInterface): Promise<void> {
+  if ((await read($, agentTimed)).isAsked) await update($, agentTimed, s => ({ ...s, isAsked: false }))
+}
+
+// What rides on a main-agent tool result: word that the start % is passed (once a
+// cycle), the reminders of a hold growing old, and a breakpoint after a commit or a
+// passing test run (`command`: a Bash command that succeeded, else null).
+async function linesFor($: EngineInterface, command: string | null): Promise<string[]> {
+  const auto = await read($, autoCompact)
+  if (!isTimed(auto)) return []
+  const startAt = startOf(auto)
+  const cap = capOf(auto)
+  const percent = lastPercent
+  const shown = Math.round(percent)
+  const state = await read($, agentTimed)
+  const lines: string[] = []
+  let told = state.told
+  let nudge = state.nudge
+  if (told !== 'yes' && shown >= startAt) {
+    lines.push(toldText(percent, startAt, cap))
+    told = 'yes'
+  }
+  if (state.hold) {
+    const step = stepNudge(nudge, nudgeLevel(percent, startAt, cap, true))
+    nudge = step.nudge
+    if (step.isSaid) lines.push(nudgeText(nudge.level === 3 ? 3 : 2, percent, startAt, cap, state.hold.reason))
+    const kind = command === null || shown < startAt || nudge.isBreakpointSaid ? null : breakpointOf(command)
+    if (kind) {
+      lines.push(breakpointText(kind))
+      nudge = { ...nudge, isBreakpointSaid: true }
+    }
+  }
+  if (told !== state.told || nudge !== state.nudge) await update($, agentTimed, s => ({ ...s, told, nudge }))
+  return lines
+}
 
 function compactNow($: EngineInterface): void {
   if (isCompacting) return
@@ -592,23 +702,29 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
   }
   $.clock.after(attempt === 1 ? 1_000 : AUTO_RETRY_MS, async () => {
     try {
+      // the agent's handoff note rides along as the summarizer's instructions (a typed
+      // /compact gets it from the session.compact hook instead)
+      const instructions = withNote(undefined, (await read($, agentTimed)).note)
       // the desktop app (an SDK session) has no direct compaction: there /compact runs
       // as a turn of its own, so it is typed, as the Compact button does
       const result = canCompactDirectly
-        ? await $.session.compact()
+        ? await $.session.compact(instructions === undefined ? undefined : { instructions })
         : (await $.command.run({ command: 'compact' }), undefined)
       // held as stuck while the figures are read again, so no tick fires a second one
-      isStuck = true
+      stuck = 'cap'
       isCompacting = false
+      // the attempt spends the agent's request, skipped or not: a skip must not loop
+      await dropAsked($)
       if (result && 'skip' in result && result.skip) $.ui.toast(`Auto compact was skipped: ${result.skip}`)
+      else if (result) await afterCompaction($)
       lastSnapshot = ''
       const usage = await $.session.usage({ breakdown: 'summary' })
-      const percent = usage.context.percent ?? 0
-      // still past the % after compacting: say so once, and do not loop on it
+      const shown = Math.round(usage.context.percent ?? 0)
+      // still past a % after compacting: say so once, and do not loop on it
       const auto = await read($, autoCompact)
-      if (auto.at !== null && Math.round(percent) >= auto.at) {
-        $.ui.toast(`Context is still at ${Math.round(percent)}% after compacting, past your ${auto.at}%: auto compact waits until it drops below`)
-      } else isStuck = false
+      stuck = shown >= capOf(auto) ? 'cap' : isTimed(auto) && shown >= startOf(auto) ? 'start' : 'no'
+      if (stuck === 'cap') $.ui.toast(`Context is still at ${shown}% after compacting, past your ${capOf(auto)}%: auto compact waits until it drops below`)
+      if (stuck === 'start') $.ui.toast(`Context is still at ${shown}% after compacting, past your ${startOf(auto)}% start: Agent-timed waits until it drops below`)
       await refresh($)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
@@ -628,15 +744,46 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
 // called with the context % whenever it is read
 async function watchAuto($: EngineInterface, percent: number): Promise<void> {
   lastPercent = percent
-  const auto = await read($, autoCompact)
-  if (!auto.isOn || auto.at === null || isNewChatsOnly) return
-  if (Math.round(percent) < auto.at) {
-    isStuck = false
-    return
+  if (isWatching) return
+  isWatching = true
+  try {
+    const auto = await read($, autoCompact)
+    if (!auto.isOn || auto.at === null) return
+    const shown = Math.round(percent)
+    const cap = auto.at
+    const startAt = startOf(auto)
+    const timed = isTimed(auto)
+    // stuck eases as the context drops below what it was stuck past
+    if (stuck === 'cap' && shown < cap) stuck = timed && shown >= startAt ? 'start' : 'no'
+    if (stuck === 'start' && (!timed || shown < startAt)) stuck = 'no'
+    if (isBusy || isCompacting) return
+    const state = await read($, agentTimed)
+    // the agents are asked after only where they can decide: in the zone, nothing else in the way
+    const isOpenZone = timed && shown >= startAt && shown < cap && !state.hold && !state.isAsked
+    const verdict = decide({
+      percent, cap, startAt, isAgentTimed: timed, isPaused: waitsForCompact || isNewChatsOnly, stuck, state,
+      hasRunningAgents: isOpenZone && (await hasRunningAgents($)),
+    })
+    // a turn may have started while the engine was asked
+    if (isBusy || isCompacting) return
+    if (verdict.action === 'tell') {
+      await update($, agentTimed, s => ({ ...s, told: 'next' as const }))
+      await tell($, toldText(percent, startAt, cap))
+      return
+    }
+    if (verdict.action !== 'compact') return
+    if (verdict.why === 'cap' && state.hold) {
+      // no hold survives the cap: it ends here, and the row after the compaction says so
+      const { reason } = state.hold
+      await update($, agentTimed, s => ({ ...s, hold: null, overridden: { reason, percent: shown } }))
+      $.ui.toast(`Context at ${shown}%: Claude's hold ends at your ${cap}%, auto compacting`)
+    } else if (verdict.why === 'cap') $.ui.toast(`Context at ${shown}%: auto compacting (set at ${cap}%)`)
+    else if (verdict.why === 'start') $.ui.toast(`Context at ${shown}%: auto compacting (Agent-timed from ${startAt}%)`)
+    else $.ui.toast('Compacting as Claude asked')
+    autoCompactNow($)
+  } finally {
+    isWatching = false
   }
-  if (waitsForCompact || isStuck || isBusy || isCompacting) return
-  $.ui.toast(`Context at ${Math.round(percent)}%: auto compacting (set at ${auto.at}%)`)
-  autoCompactNow($)
 }
 
 async function saveAuto($: EngineInterface, next: AutoCompact): Promise<void> {
@@ -661,18 +808,19 @@ async function loadAuto($: EngineInterface): Promise<void> {
   autoChat = id
   const saved = await storeGet<AutoCompact>($, `autoCompact:${id}`)
   isNewChatsOnly = false
-  isStuck = false
+  stuck = 'no'
   waitsForCompact = false
   await update($, autoCompact, () => (saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : { isOn: false, at: AT_DEFAULT }))
   await update($, autoAsk, () => null)
+  // another chat: what the agent held, noted or asked for belonged to the last one
+  await update($, agentTimed, () => EMPTY)
+  if (saved && isTimed(saved)) await ensureTool($)
 }
 
 // the % field sets on Enter, or when the focus leaves it with an unset draft (a
 // click elsewhere in the band, or the next prompt sent); 15 to 99, outside is pulled
 // in. After a set the field is drawn afresh (fieldTick), which also drops its focus
 const AT_MIN = 15
-// the % whenever there is none: a blank field, a first switch-on
-const AT_DEFAULT = 80
 const AT_MAX = 99
 let draftAt: string | null = null
 
@@ -740,7 +888,7 @@ async function setThreshold($: EngineInterface, at: number): Promise<void> {
 // turning it on, or a new %, while the context is already past it: ask first
 async function askIfPast($: EngineInterface, at: number | null): Promise<void> {
   isNewChatsOnly = false
-  isStuck = false
+  stuck = 'no'
   const isPast = at !== null && Math.round(lastPercent) >= at
   waitsForCompact = isPast
   await update($, autoAsk, () => (isPast ? { at: at!, percent: Math.round(lastPercent) } : null))
@@ -854,12 +1002,17 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     // already carry its last reply's total, so not only while that is blank)
     if (isOpening) openMessages = Math.max(rough.Messages, context.tokens ?? 0)
     // the reply total going blank after a reply: the chat was compacted (or cleared)
-    if (context.tokens !== undefined) hadReply = true
-    else if (hadReply) {
+    if (context.tokens !== undefined) {
+      hadReply = true
+      // a reply since the last compaction: the next one is news again
+      isCompactionHandled = false
+    } else if (hadReply) {
       hadReply = false
       // an ask left unanswered meant "after my next compact": done with now
       if (waitsForCompact) await update($, autoAsk, () => null)
       waitsForCompact = false
+      // a compaction nobody told Agent-timed of: its cycle starts over here
+      if (!isCompactionHandled) await afterCompaction($)
     }
     const useExact = context.tokens === undefined && exactCount !== undefined && noReplySince !== undefined && exactCount.at >= noReplySince
     let tools = Math.round(rough.Tools * (calib.Tools ?? 1))
@@ -918,6 +1071,45 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
 }
 
 export const register: Register = on => {
+  // the mod's own tool: no permission prompt stands between the agent and a hold
+  on('tool.check', { tool: 'mcp__claude-code-usage-quota__compaction' }, () => ({ decision: 'allow' as const }))
+
+  on('tool.call', { tool: 'mcp__claude-code-usage-quota__compaction' }, async ($, e) => {
+    const input = e as unknown as ToolInput & { agentId?: string }
+    const auto = await read($, autoCompact)
+    const before = await read($, agentTimed)
+    const answer = answerTool(before, input, {
+      isOn: isTimed(auto),
+      isSubagent: input.agentId !== undefined,
+      percent: lastPercent,
+      startAt: startOf(auto),
+      cap: capOf(auto),
+      now: await $.clock.now(),
+    })
+    if (answer.state !== before) await update($, agentTimed, () => answer.state)
+    return { result: answer.text }
+  })
+
+  // what the agent is told mid-turn rides on its own tool results; a subagent's carry
+  // nothing. A hook that fails here is skipped and the tool's result stands as it was
+  on('tool.call', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.agentId !== undefined || String(e.tool) === TOOL || ran.deny !== undefined) return ran
+    const isBashDone = String(e.tool) === 'Bash' && ran.isError !== true
+    const lines = await linesFor($, isBashDone ? String((e as { command?: unknown }).command ?? '') : null)
+    return lines.length === 0 ? ran : { ...ran, context: [...(ran.context ?? []), ...lines] }
+  })
+
+  // Any compaction of the main conversation: the agent's note goes to the summarizer
+  // (added once, however many places add it), and afterwards the cycle starts over.
+  // A subagent's own compaction, and one computed ahead of time, are none of this
+  on('session.compact', async ($, e, next) => {
+    if (e.agentId !== undefined || e.trigger === 'precompute') return next(e)
+    const instructions = withNote(e.instructions, (await read($, agentTimed)).note)
+    const done = await next(instructions === e.instructions ? e : { ...e, instructions })
+    if (done.skip === undefined) await afterCompaction($)
+    return done
+  })
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'quota', description: 'Toggle the Claude Code Usage Quota band above the prompt' })
     const result = await next(e)
@@ -968,6 +1160,8 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     isBusy = true
+    // told at the end of the last turn: this turn is the agent's chance to hold
+    if ((await read($, agentTimed)).told === 'next') await update($, agentTimed, s => ({ ...s, told: 'yes' as const }))
     if (isOpening) {
       isOpening = false
       const snap = await read($, snapshot)
@@ -988,6 +1182,8 @@ export const register: Register = on => {
     spikeFrom = undefined
     // the turn is over: auto compact may fire now, never mid-reply
     isBusy = false
+    // interrupted or failed: what the agent asked for at this turn's end no longer stands
+    if (e.reason !== 'answer') await dropAsked($)
     const snap = await read($, snapshot)
     if (snap) await watchAuto($, snap.percent)
     return result
