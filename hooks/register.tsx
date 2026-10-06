@@ -3,7 +3,7 @@ import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import type { AgentTimed, AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
 import {
-  AT_DEFAULT, EMPTY, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
+  AT_DEFAULT, EMPTY, REASON_SHOWN, START_DEFAULT, START_MIN, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
   afterText, answerTool, breakpointOf, breakpointText, capOf, decide, isTimed, nudgeLevel, nudgeText, startOf, stepNudge, toldText, withNote,
 } from './agent-policy'
 import type { Stuck, ToolInput } from './agent-policy'
@@ -17,6 +17,9 @@ const agentTimed = atom({ plugin: 'claude-code-usage-quota', key: 'agentTimed' }
 const fieldTick = atom({ plugin: 'claude-code-usage-quota', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
 const fieldText = atom({ plugin: 'claude-code-usage-quota', key: 'fieldText' } as const, null as string | null)
+// the start % field's own tick and typed text, as fieldTick and fieldText are the cap's
+const startTick = atom({ plugin: 'claude-code-usage-quota', key: 'startTick' } as const, 0)
+const startText = atom({ plugin: 'claude-code-usage-quota', key: 'startText' } as const, null as string | null)
 const theme = atom({ plugin: 'claude-code-usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
 const autoAsk = atom({ plugin: 'claude-code-usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
 
@@ -822,12 +825,10 @@ async function loadAuto($: EngineInterface): Promise<void> {
 // in. After a set the field is drawn afresh (fieldTick), which also drops its focus
 const AT_MIN = 15
 const AT_MAX = 99
-let draftAt: string | null = null
 
 // no event says a click landed outside the band, so a draft also sets itself once
 // typing has rested a while, as if the person had clicked away
 const AT_REST_MS = 2_000
-let restTimer: { cancel(): void } | null = null
 
 // the field takes digits only, 3 at most: anything else typed or pasted is dropped
 // as it arrives, by drawing the field's text again cleaned
@@ -840,59 +841,140 @@ function cleanAt(value: string): string {
   return value.replace(/\D/g, '').slice(0, AT_DIGITS)
 }
 
-// what the field shows comes from state, not a module variable: a press or a typing
-// runs apart from the draw, so a value the draw kept would not be seen here
-async function redrawField($: EngineInterface, value: string): Promise<void> {
-  const at = (await read($, autoCompact)).at ?? AT_DEFAULT
-  await update($, fieldText, drawn => (value === (drawn ?? `${at}`) ? value + NO_WIDTH : value))
+// The two % fields, the cap's and Agent-timed's start: each with its own draft while
+// typed in and its rest timer. What a field shows comes from state, not a module
+// variable: a press or a typing runs apart from the draw, so a value the draw kept
+// would not be seen here
+type FieldName = 'at' | 'startAt'
+const FIELD_NAMES = ['at', 'startAt'] as const
+const fields = {
+  at: { draft: null as string | null, timer: null as { cancel(): void } | null },
+  startAt: { draft: null as string | null, timer: null as { cancel(): void } | null },
 }
 
-function typedAt($: EngineInterface, raw: string): void {
+// a field's text and tick, each written by its own name (a write names its state outright)
+async function setFieldText($: EngineInterface, name: FieldName, next: (drawn: string | null) => string | null): Promise<void> {
+  if (name === 'at') await update($, fieldText, next)
+  else await update($, startText, next)
+}
+// a new field (its key changes), so it shows the set value whatever was typed
+async function redrawNew($: EngineInterface, name: FieldName): Promise<void> {
+  await setFieldText($, name, () => null)
+  if (name === 'at') await update($, fieldTick, n => n + 1)
+  else await update($, startTick, n => n + 1)
+}
+
+async function redrawField($: EngineInterface, name: FieldName, value: string): Promise<void> {
+  const auto = await read($, autoCompact)
+  const set = name === 'at' ? capOf(auto) : startOf(auto)
+  await setFieldText($, name, drawn => (value === (drawn ?? `${set}`) ? value + NO_WIDTH : value))
+}
+
+function typedAt($: EngineInterface, name: FieldName, raw: string): void {
+  const field = fields[name]
   const value = cleanAt(raw)
-  if (value !== raw) void redrawField($, value)
-  draftAt = value
-  restTimer?.cancel()
-  restTimer = $.clock.after(AT_REST_MS, () => {
-    restTimer = null
-    void commitDraft($)
+  if (value !== raw) void redrawField($, name, value)
+  field.draft = value
+  field.timer?.cancel()
+  field.timer = $.clock.after(AT_REST_MS, () => {
+    field.timer = null
+    void commitDraft($, name)
   })
 }
 
-async function commitDraft($: EngineInterface): Promise<void> {
-  if (draftAt === null) return
-  await commitAt($, draftAt)
+// sets what was typed and left unset: in one field, or in both
+async function commitDraft($: EngineInterface, only?: FieldName): Promise<void> {
+  for (const name of only ? [only] : FIELD_NAMES) {
+    const { draft } = fields[name]
+    if (draft !== null) await commitAt($, name, draft)
+  }
 }
 
-async function commitAt($: EngineInterface, value: string): Promise<void> {
-  draftAt = null
-  restTimer?.cancel()
-  restTimer = null
+async function commitAt($: EngineInterface, name: FieldName, value: string): Promise<void> {
+  const field = fields[name]
+  field.draft = null
+  field.timer?.cancel()
+  field.timer = null
   const text = cleanAt(value)
-  // only digits reach here: blank is the default, out of range is pulled in, every time
-  const typed = text === '' ? AT_DEFAULT : Number(text)
-  const at = Math.min(AT_MAX, Math.max(AT_MIN, typed))
-  if (typed !== at) $.ui.toast(`Auto compact: ${typed < at ? 'the least' : 'the most'} is ${at}% – set to ${at}%`)
-  await setThreshold($, at)
-  // a new field every time (its key changes), so it shows the set value whatever was typed
-  await update($, fieldText, () => null)
-  await update($, fieldTick, n => n + 1)
+  if (name === 'at') {
+    // only digits reach here: blank is the default, out of range is pulled in, every time
+    const typed = text === '' ? AT_DEFAULT : Number(text)
+    const at = Math.min(AT_MAX, Math.max(AT_MIN, typed))
+    if (typed !== at) $.ui.toast(`Auto compact: ${typed < at ? 'the least' : 'the most'} is ${at}% – set to ${at}%`)
+    await setThreshold($, at)
+  } else {
+    const auto = await read($, autoCompact)
+    const cap = capOf(auto)
+    const typed = text === '' ? START_DEFAULT : Number(text)
+    const startAt = Math.min(cap - 1, Math.max(START_MIN, typed))
+    if (typed < startAt) $.ui.toast(`Agent-timed: the least is ${startAt}% – set to ${startAt}%`)
+    if (typed > startAt) $.ui.toast(`Agent-timed starts below your ${cap}% – set to ${startAt}%`)
+    await saveAuto($, { ...auto, startAt })
+    if (isTimed(auto)) await askIfPast($, startAt, `Agent-timed from ${startAt}% to ${cap}% context`)
+  }
+  await redrawNew($, name)
 }
 
-// a new threshold: armed when the context is below it, else the band asks, in its
-// own buttons (never the chat's question dialog, which runs through the chat)
+// a new cap: armed when the context is below it, else the band asks, in its own
+// buttons (never the chat's question dialog, which runs through the chat). The start %
+// stays below the cap: a cap set at or under it pulls it down
 async function setThreshold($: EngineInterface, at: number): Promise<void> {
-  await saveAuto($, { isOn: true, at })
+  const auto = await read($, autoCompact)
+  const pulled = Math.min(startOf(auto), at - 1)
+  if (isTimed(auto) && pulled !== startOf(auto)) {
+    $.ui.toast(`Agent-timed now starts at ${pulled}%, below your ${at}%`)
+    await redrawNew($, 'startAt')
+  }
+  await saveAuto($, { ...auto, isOn: true, at, ...(auto.startAt == null ? {} : { startAt: Math.min(auto.startAt, at - 1) }) })
   await askIfPast($, at)
 }
 
 // turning it on, or a new %, while the context is already past it: ask first
-async function askIfPast($: EngineInterface, at: number | null): Promise<void> {
+// (`armed`: what the toast says when it is not)
+async function askIfPast($: EngineInterface, at: number | null, armed = `Auto compact at ${at}% context`): Promise<void> {
   isNewChatsOnly = false
   stuck = 'no'
   const isPast = at !== null && Math.round(lastPercent) >= at
   waitsForCompact = isPast
   await update($, autoAsk, () => (isPast ? { at: at!, percent: Math.round(lastPercent) } : null))
-  if (!isPast && at !== null) $.ui.toast(`Auto compact at ${at}% context`)
+  if (!isPast && at !== null) $.ui.toast(armed)
+}
+
+// Auto compact on or off for this chat, read from the state, not a draw's own value
+async function setAuto($: EngineInterface, isOn: boolean): Promise<void> {
+  const auto = await read($, autoCompact)
+  const next = { ...auto, isOn, at: capOf(auto) }
+  await saveAuto($, next)
+  if (!isOn) {
+    await update($, autoAsk, () => null)
+    return
+  }
+  if (isTimed(next)) await ensureTool($)
+  await askIfPast($, isTimed(next) ? startOf(next) : next.at)
+}
+
+// Agent-timed on or off for this chat. On needs the agent's tool; off, what the agent
+// held, noted or asked for has no say any more
+async function setTimed($: EngineInterface, isAgentTimed: boolean): Promise<void> {
+  const auto = await read($, autoCompact)
+  if (isAgentTimed && !(await ensureTool($))) {
+    $.ui.toast('Agent-timed could not start: its tool could not be registered')
+    return
+  }
+  const next = { ...auto, isAgentTimed, startAt: startOf(auto) }
+  await saveAuto($, next)
+  if (isAgentTimed) {
+    await askIfPast($, next.startAt, `Agent-timed from ${next.startAt}% to ${capOf(next)}% context`)
+    return
+  }
+  await update($, agentTimed, () => EMPTY)
+  await askIfPast($, capOf(next), 'Agent-timed off')
+}
+
+// the person ends the agent's hold from the band: compact now, or let the rule decide
+async function endHold($: EngineInterface, isCompactNow: boolean): Promise<void> {
+  await update($, agentTimed, s => ({ ...s, hold: null, isAsked: isCompactNow || s.isAsked }))
+  await watchAuto($, lastPercent)
 }
 
 type AskChoice = 'now' | 'next' | 'new'
@@ -1144,7 +1226,8 @@ export const register: Register = on => {
 
   // the focus leaving the % field sets what was typed in it
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!e.element?.startsWith('autoAt')) await commitDraft($)
+    if (!e.element?.startsWith('autoAt')) await commitDraft($, 'at')
+    if (!e.element?.startsWith('startAt')) await commitDraft($, 'startAt')
     return next(e)
   })
 
@@ -1234,20 +1317,18 @@ export const register: Register = on => {
     const ask = await read($, autoAsk)
     const tick = await read($, fieldTick)
     const drawnAt = (await read($, fieldText)) ?? `${auto.at ?? AT_DEFAULT}`
-    const submitAt = (value: string) => commitAt($, value)
-    const toggleAuto = () => {
-      const flipped = { isOn: !auto.isOn, at: auto.at ?? AT_DEFAULT }
-      void saveAuto($, flipped).then(() =>
-        flipped.isOn ? askIfPast($, flipped.at) : update($, autoAsk, () => null),
-      )
-    }
+    const timed = isTimed(auto)
+    const agent = await read($, agentTimed)
+    const startTickNow = await read($, startTick)
+    const drawnStart = (await read($, startText)) ?? `${startOf(auto)}`
     // Laid out to the width the chat gives the band, down to the desktop's narrowest
     // chat: what fits side by side stays side by side; past that it stacks, and text
     // wraps rather than cuts off.
     // The header: the headline beside the controls when both fit, else the controls
     // on a row of their own beneath it
     // (the desktop's letters are narrower than its cells: about 0.8 of one)
-    const CONTROLS = 40
+    // (the Agent-timed switch and its name add 14 cells, its "from" and field 10 more)
+    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0)
     // the terminal draws its own hide control ([-]) over the band's top-right
     // corner: the first row keeps clear of it
     const HOST_HIDE = Svg ? 0 : 4
@@ -1267,46 +1348,58 @@ export const register: Register = on => {
     const ASK_LABELS = ['Now', 'After my next compact', 'Only in new chats']
     const askWords = (ask ? `Context is already at ${ask.percent}%, past ${ask.at}%. Auto compact:`.length : 0) + ASK_LABELS.join('').length
     const isAskLine = width >= askWords * (Svg ? 0.8 : 1) + ASK_LABELS.length * (Svg ? 3 : 4) + 3
+    // the agent's hold, while Agent-timed is on: who holds, how long, why (cut short)
+    const held = timed ? agent.hold : null
+    const holdWords = held
+      ? `Held by Claude ${duration(now - held.since)}: ${held.reason.length > REASON_SHOWN ? `${held.reason.slice(0, REASON_SHOWN - 1)}…` : held.reason}`
+      : ''
+    const HOLD_LABELS = ['Compact now', 'Release']
+    const isHoldLine = width >= (holdWords.length + HOLD_LABELS.join('').length) * (Svg ? 0.8 : 1) + HOLD_LABELS.length * (Svg ? 3 : 4) + 2
 
+    // an iOS-style switch on the desktop, a dot on the terminal; `key` names its press
+    const switchOf = (key: string, name: string, isOn: boolean, onPress: () => void) =>
+      Svg ? (
+        <Box key={`${key}Switch`} width={SWITCH_CELLS} height={1} overflow="hidden">
+          {/* three layers, each the box's full size, so all share one centre: the
+              rounded light (unlit: an invisible border), the pill, the press */}
+          <Box position="absolute" top={0} left={0} width={SWITCH_CELLS} height={1} borderStyle="round" borderColor={CLEAR} hover={{ backgroundColor: SWITCH_LIT, borderColor: SWITCH_LIT }} />
+          <Box position="absolute" top={0} left={0} width={SWITCH_CELLS} height={1} alignItems="center" justifyContent="center">
+            <Svg alt={`${name} ${isOn ? 'on' : 'off'}`} source={switchSvg(isOn)} width={SWITCH_W} height={SWITCH_H} />
+          </Box>
+          {/* a chromeless button over all of it takes the click: three em spaces wide */}
+          <Box position="absolute" top={0} left={0}>
+            <Button key={key} label={'   '} plain hover={{ backgroundColor: CLEAR }} onPress={onPress} />
+          </Box>
+        </Box>
+      ) : (
+        <Button key={key} label={isOn ? '●' : '○'} plain onPress={onPress} />
+      )
+    // a % field (3 digits) that sets itself once typing pauses; a plain % right after it
+    const fieldOf = (name: FieldName, key: string, drawn: string) => (
+      <Box flexDirection="row" alignItems="center">
+        {/* the field's Enter chip can't be turned off: the field is drawn wider than
+            its box and the box clips the chip away */}
+        <Box width={4} overflow="hidden">
+          <Box width={6} flexShrink={0}>
+            <Input
+              key={key}
+              value={drawn}
+              submitLabel={NO_WIDTH}
+              onInput={value => typedAt($, name, value)}
+              onSubmit={value => commitAt($, name, value)}
+            />
+          </Box>
+        </Box>
+        <Text color={MUTED}>%</Text>
+      </Box>
+    )
     const controls = (
       <Box flexDirection="row" alignItems="center" columnGap={1} flexShrink={0} flexWrap="wrap">
-        {/* auto compact: the switch (the press), its name, the % field beside it,
-            then a wide gap so the field reads as the switch's, not Compact's */}
-        {Svg ? (
-          <Box key="autoSwitch" width={SWITCH_CELLS} height={1} overflow="hidden">
-            {/* three layers, each the box's full size, so all share one centre: the
-                rounded light (unlit: an invisible border), the pill, the press */}
-            <Box position="absolute" top={0} left={0} width={SWITCH_CELLS} height={1} borderStyle="round" borderColor={CLEAR} hover={{ backgroundColor: SWITCH_LIT, borderColor: SWITCH_LIT }} />
-            <Box position="absolute" top={0} left={0} width={SWITCH_CELLS} height={1} alignItems="center" justifyContent="center">
-              <Svg alt={`Auto compact ${auto.isOn ? 'on' : 'off'}`} source={switchSvg(auto.isOn)} width={SWITCH_W} height={SWITCH_H} />
-            </Box>
-            {/* a chromeless button over all of it takes the click */}
-            <Box position="absolute" top={0} left={0}>
-              <Button key="auto" label={'   '} plain hover={{ backgroundColor: CLEAR }} onPress={toggleAuto} />
-            </Box>
-          </Box>
-        ) : (
-          <Button key="auto" label={auto.isOn ? '●' : '○'} plain onPress={toggleAuto} />
-        )}
+        {/* auto compact: the switch (the press), its name, the % field beside it */}
+        {switchOf('auto', 'Auto compact', auto.isOn, () => void setAuto($, !auto.isOn))}
         <Text color={auto.isOn ? undefined : MUTED}>Auto compact</Text>
         {auto.isOn ? (
-          // the field (3 digits) sets itself once typing pauses; a plain % right after it
-          <Box flexDirection="row" alignItems="center">
-            {/* the field's Enter chip can't be turned off: the field is drawn wider than
-                its box and the box clips the chip away */}
-            <Box width={4} overflow="hidden">
-              <Box width={6} flexShrink={0}>
-                <Input
-                  key={`autoAt${tick}`}
-                  value={drawnAt}
-                  submitLabel={'​'}
-                  onInput={value => typedAt($, value)}
-                  onSubmit={value => submitAt(value)}
-                />
-              </Box>
-            </Box>
-            <Text color={MUTED}>%</Text>
-          </Box>
+          fieldOf('at', `autoAt${tick}`, drawnAt)
         ) : Svg ? (
           // off: the field's room is kept, unseen, so the switch sits at the very same
           // spot and draws pixel for pixel as when on
@@ -1315,6 +1408,11 @@ export const register: Register = on => {
             <Text color={CLEAR}>%</Text>
           </Box>
         ) : null}
+        {/* Agent-timed, a mode of auto compact: its switch, and where it starts */}
+        {auto.isOn ? switchOf('timed', 'Agent-timed', timed, () => void setTimed($, !timed)) : null}
+        {auto.isOn ? <Text color={timed ? undefined : MUTED}>{timed ? 'Agent-timed from' : 'Agent-timed'}</Text> : null}
+        {timed ? fieldOf('startAt', `startAt${startTickNow}`, drawnStart) : null}
+        {/* a wide gap, so the fields read as the switches', not Compact's */}
         <Box key="compactBox" marginLeft={isHeadBeside ? 2 : 0}>
           <Button key="compact" label="Compact" hover={{ backgroundColor: COMPACT_LIT }} onPress={() => compactNow($)} />
         </Box>
@@ -1544,6 +1642,14 @@ export const register: Register = on => {
       </Box>
     )
 
+    const holdText = held ? <Text color={AMBER} wrap="wrap">{holdWords}</Text> : null
+    const holdButtons = (
+      <Box flexDirection="row" columnGap={1} flexWrap="wrap" flexShrink={0}>
+        <Button key="holdCompact" label="Compact now" onPress={() => void endHold($, true)} />
+        <Button key="holdRelease" label="Release" onPress={() => void endHold($, false)} />
+      </Box>
+    )
+
     return (
       <Box flexDirection="column">
         {isHeadBeside ? (
@@ -1570,6 +1676,25 @@ export const register: Register = on => {
               <Box marginTop={gap}>{askButtons}</Box>
             </Box>
           )
+        ) : null}
+
+        {holdText ? (
+          isHoldLine ? (
+            <Box flexDirection="row" alignItems="center" columnGap={1} marginBottom={gap}>
+              <Box flexShrink={1}>{holdText}</Box>
+              {holdButtons}
+            </Box>
+          ) : (
+            <Box flexDirection="column" marginBottom={gap}>
+              {holdText}
+              <Box marginTop={gap}>{holdButtons}</Box>
+            </Box>
+          )
+        ) : null}
+        {timed && agent.isAsked ? (
+          <Box marginBottom={gap}>
+            <Text color={MUTED}>Compacting when this turn ends</Text>
+          </Box>
         ) : null}
 
         {collapsed ? (

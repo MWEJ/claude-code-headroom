@@ -361,3 +361,167 @@ test('a compaction from elsewhere carries the note too, and starts the cycle ove
   await $.session.compact({ agentId: 'a1', trigger: 'auto', messages: [{ role: 'user', text: 'hi', toolUses: [] }] } as never)
   expect(rows(seen)).toHaveLength(2)
 })
+
+// the band, on both surfaces it draws on
+const SURFACES = ['terminal', 'desktop'] as const
+const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 120, scroll: { offset: 0, bodyRows: 20 }, view: {} }
+
+const startKey = async (ui: { findAll: (q: { type: 'Input' }) => Promise<{ props: { key?: string; value?: string } }[]> }) =>
+  (await ui.findAll({ type: 'Input' })).find(i => String(i.props.key).startsWith('startAt'))
+const capKey = async (ui: { findAll: (q: { type: 'Input' }) => Promise<{ props: { key?: string; value?: string } }[]> }) =>
+  (await ui.findAll({ type: 'Input' })).find(i => String(i.props.key).startsWith('autoAt'))
+
+for (const surface of SURFACES) {
+  test(`the band (${surface}): Agent-timed shows beside auto compact, with its own % field kept between 10 and one below the cap`, async ($, on) => {
+    const percent = { value: 16 }
+    const { seen } = world(on, percent, null)
+    await $.session.start(START)
+    const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    // auto compact off: no sign of it
+    expect(await ui.find({ type: 'Text', text: /^Agent-timed/ })).toBeUndefined()
+    await ui.press({ key: 'auto' })
+    expect(await ui.find({ type: 'Text', text: 'Agent-timed' })).toBeDefined()
+    expect(await startKey(ui)).toBeUndefined()
+    expect(seen.registered).toEqual([])
+
+    await ui.press({ key: 'timed' })
+    expect(await ui.find({ type: 'Text', text: 'Agent-timed from' })).toBeDefined()
+    expect((await startKey(ui))?.props.value).toBe('30')
+    expect(seen.registered).toEqual(['compaction'])
+    expect(seen.toasts).toContain('Agent-timed from 30% to 80% context')
+
+    for (const [typed, shown] of [['5', '10'], ['95', '79'], ['80', '79'], ['', '30'], ['45', '45']]) {
+      await ui.input({ key: String((await startKey(ui))?.props.key), text: typed })
+      expect((await startKey(ui))?.props.value).toBe(shown)
+    }
+    expect(seen.toasts).toContain('Agent-timed: the least is 10% – set to 10%')
+    expect(seen.toasts).toContain('Agent-timed starts below your 80% – set to 79%')
+
+    // a cap set at or under the start % pulls it down
+    await ui.input({ key: String((await capKey(ui))?.props.key), text: '40' })
+    expect((await capKey(ui))?.props.value).toBe('40')
+    expect((await startKey(ui))?.props.value).toBe('39')
+    expect(seen.toasts).toContain('Agent-timed now starts at 39%, below your 40%')
+
+    await ui.press({ key: 'timed' })
+    expect(await startKey(ui)).toBeUndefined()
+    expect(seen.toasts).toContain('Agent-timed off')
+    await ui.unmount()
+  })
+}
+
+test('the band: where the tool cannot be registered, Agent-timed says so and stays off', async ($, on) => {
+  const percent = { value: 16 }
+  const { seen } = world(on, percent, { isOn: true, at: 80 })
+  seen.canRegister = false
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  await ui.press({ key: 'timed' })
+  expect(seen.toasts).toContain('Agent-timed could not start: its tool could not be registered')
+  expect(await ui.find({ type: 'Svg', alt: 'Agent-timed off' })).toBeDefined()
+  expect(await startKey(ui)).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the band: switched on past the start %, it asks first', async ($, on) => {
+  const percent = { value: 45 }
+  const { clock, seen } = world(on, percent, { isOn: true, at: 80 })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await ui.press({ key: 'timed' })
+  expect(await ui.find({ type: 'Text', text: 'Context is already at 45%, past 30%. Auto compact:' })).toBeDefined()
+  await $.turn.start(GO)
+  await end($, clock)
+  expect(seen.compacted).toEqual([])
+  await ui.press({ key: 'askNow' })
+  await clock.advance(1_100)
+  expect(seen.compacted).toEqual([undefined])
+  await ui.unmount()
+})
+
+test('the band: the hold shows with who, how long and why; Release and Compact now end it', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock, seen } = world(on, percent)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+
+  await into($, clock, percent, 35)
+  await bash($)
+  await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
+  expect(await ui.find({ type: 'Text', text: 'Held by Claude 0m: mid-refactor of auth' })).toBeDefined()
+  await end($, clock)
+  await clock.advance(120_000)
+  expect(await ui.find({ type: 'Text', text: 'Held by Claude 2m: mid-refactor of auth' })).toBeDefined()
+  expect(seen.compacted).toEqual([])
+
+  // Release: the hold goes, and the rule decides (idle and told: it compacts)
+  await ui.press({ key: 'holdRelease' })
+  expect(await ui.find({ type: 'Text', text: /^Held by Claude/ })).toBeUndefined()
+  await clock.advance(1_100)
+  expect(seen.compacted).toEqual([undefined])
+
+  // Compact now, mid-turn: it waits for the turn's end, and says so
+  await into($, clock, percent, 35)
+  await tool($, { action: 'hold', reason: 'x'.repeat(200) })
+  expect((await ui.find({ type: 'Text', text: /^Held by Claude/ }))?.text).toBe(`Held by Claude 0m: ${'x'.repeat(79)}…`)
+  await ui.press({ key: 'holdCompact' })
+  expect(await ui.find({ type: 'Text', text: 'Compacting when this turn ends' })).toBeDefined()
+  expect(seen.compacted).toHaveLength(1)
+  await end($, clock)
+  expect(seen.compacted).toHaveLength(2)
+  expect(await ui.find({ type: 'Text', text: 'Compacting when this turn ends' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the band: the cap lowered under the context while the agent holds asks about the cap; "Now" compacts and ends the hold', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock, seen } = world(on, percent)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+
+  await into($, clock, percent, 50)
+  await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
+  await end($, clock)
+  await ui.input({ key: String((await capKey(ui))?.props.key), text: '45' })
+  expect(await ui.find({ type: 'Text', text: 'Context is already at 50%, past 45%. Auto compact:' })).toBeDefined()
+  expect(seen.compacted).toEqual([])
+  await ui.press({ key: 'askNow' })
+  await clock.advance(1_100)
+  expect(seen.compacted).toEqual([undefined])
+  expect(await ui.find({ type: 'Text', text: /^Held by Claude/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the band: Agent-timed switched off while the agent holds: the hold goes and has no say', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock, seen } = world(on, percent)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+
+  await into($, clock, percent, 35)
+  await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
+  await end($, clock)
+  await ui.press({ key: 'timed' })
+  expect(await ui.find({ type: 'Text', text: /^Held by Claude/ })).toBeUndefined()
+  expect(await tool($, { action: 'status' })).toBe('Agent-timed compaction is off in this chat. Nothing changed.')
+  // plain auto compact from here: nothing at 35%, the cap at 80%
+  await $.turn.start(GO)
+  await end($, clock)
+  expect(seen.compacted).toEqual([])
+  await into($, clock, percent, 81)
+  await end($, clock)
+  expect(seen.compacted).toEqual([undefined])
+  await ui.unmount()
+})
+
+test('the band: a narrow chat keeps every control, wrapped', async ($, on) => {
+  world(on, { value: 16 })
+  await $.session.start(START)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface, component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 40 } })
+    expect(await ui.find({ type: 'Text', text: 'Agent-timed from' })).toBeDefined()
+    expect((await startKey(ui))?.props.value).toBe('30')
+    expect(await ui.find({ key: 'compact' })).toBeDefined()
+    await ui.unmount()
+  }
+})
