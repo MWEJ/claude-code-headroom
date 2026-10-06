@@ -391,7 +391,7 @@ for (const surface of SURFACES) {
     expect(seen.toasts).toContain('Agent-timed from 30% to 80% context')
 
     for (const [typed, shown] of [['5', '10'], ['95', '79'], ['80', '79'], ['', '30'], ['45', '45']]) {
-      await ui.input({ key: String((await startKey(ui))?.props.key), text: typed })
+      await ui.input({ key: String((await startKey(ui))?.props.key), text: typed as string })
       expect((await startKey(ui))?.props.value).toBe(shown)
     }
     expect(seen.toasts).toContain('Agent-timed: the least is 10% – set to 10%')
@@ -418,7 +418,7 @@ test('the band: where the tool cannot be registered, Agent-timed says so and sta
   const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   await ui.press({ key: 'timed' })
   expect(seen.toasts).toContain('Agent-timed could not start: its tool could not be registered')
-  expect(await ui.find({ type: 'Svg', alt: 'Agent-timed off' })).toBeDefined()
+  expect(await ui.find({ type: 'Svg', alt: 'Agent-timed off' } as never)).toBeDefined()
   expect(await startKey(ui)).toBeUndefined()
   await ui.unmount()
 })

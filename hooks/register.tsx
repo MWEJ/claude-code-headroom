@@ -1385,8 +1385,8 @@ export const register: Register = on => {
               key={key}
               value={drawn}
               submitLabel={NO_WIDTH}
-              onInput={value => typedAt($, name, value)}
-              onSubmit={value => commitAt($, name, value)}
+              onInput={(value: string) => typedAt($, name, value)}
+              onSubmit={(value: string) => commitAt($, name, value)}
             />
           </Box>
         </Box>
