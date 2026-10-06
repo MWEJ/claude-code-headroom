@@ -504,6 +504,10 @@ test('the band: Agent-timed switched off while the agent holds: the hold goes an
   await ui.press({ key: 'timed' })
   expect(await ui.find({ type: 'Text', text: /^Held by Claude/ })).toBeUndefined()
   expect(await tool($, { action: 'status' })).toBe('Agent-timed compaction is off in this chat. Nothing changed.')
+  // switched on again, the hold it dropped does not come back; then off once more
+  await ui.press({ key: 'timed' })
+  expect(await tool($, { action: 'status' })).toStartWith('hold: none\nnote: none')
+  await ui.press({ key: 'timed' })
   // plain auto compact from here: nothing at 35%, the cap at 80%
   await $.turn.start(GO)
   await end($, clock)
