@@ -800,6 +800,23 @@ test('auto compact tries again while the turn is still winding down', async ($, 
   expect(tries).toBe(3)
 })
 
+test("a subagent's turn ending is not the main turn ending: auto compact waits for the main one", async ($, on) => {
+  const percent = { value: 16 }
+  const ran: string[] = []
+  const clock = startWorld(on, percent, ran, [], 'Compact now', { 'autoCompact:chat': { isOn: true, at: 40 } })
+  await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
+
+  await $.turn.start({ text: 'go', turnId: 't1' } as never)
+  percent.value = 45
+  // a subagent of the turn finishes: the main turn is still running
+  await $.turn.complete({ ...(TURN as object), agentId: 'a1' } as never)
+  await clock.advance(3_100)
+  expect(ran).toEqual([])
+  await $.turn.complete(TURN)
+  await clock.advance(1_100)
+  expect(ran).toEqual(['compact'])
+})
+
 test('a chat opened past the auto compact % compacts at once, as after an app restart', async ($, on) => {
   const percent = { value: 32 }
   const ran: string[] = []
