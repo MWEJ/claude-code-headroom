@@ -12,7 +12,7 @@ Type **`/headroom`** to turn the band off and on.
 
 ## Expanded
 
-![The band, expanded, above the prompt in the Claude desktop app](docs/expanded-desktop.png)
+![The band, expanded, above the prompt in the Claude desktop app](docs/expanded-desktop-v2.png)
 
 ## Collapsed
 
