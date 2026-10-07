@@ -18,7 +18,7 @@ Type **`/headroom`** to turn the band off and on.
 
 One row that still shows the time left until each limit resets:
 
-![The band, collapsed, above the prompt in the Claude desktop app](docs/collapsed-desktop.png)
+![The band, collapsed, above the prompt in the Claude desktop app](docs/collapsed-desktop-v2.png)
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on from the start.**
