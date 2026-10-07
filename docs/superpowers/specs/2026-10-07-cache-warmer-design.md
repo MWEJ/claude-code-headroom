@@ -99,11 +99,33 @@ lifetime (`usage-quota.cacheTtl`: 5m or 1h) and the idle limits (`usage-quota.id
 `usage-quota.idle1h`, 0 to 20, default 5). The switch in the band sets the chat; the rows set
 the default for new chats.
 
-The lifetime default: **leave Claude Code's own (5m) unless the person chooses 1h.** cache-warmer
-defaults to 1h, which doubles every cache write. On Fable 5.1, whose cache reads cost a fortieth
-of input, a 5m cache kept alive by refreshes is cheaper than a 1h cache unless breaks regularly
-approach an hour; on Opus 5.5 (reads a twentieth) it is close. Pi's rule decides each refresh
-either way; the default only decides what every write costs.
+The lifetime default: **set nothing, and follow what Claude Code chooses.** Claude Code 2.1.291
+(read from its binary, the `promptCacheTtl` setting's own description and the function that
+resolves the lifetime) picks the main conversation's lifetime in this order:
+
+1. `FORCE_PROMPT_CACHING_5M` set: 5m
+2. `CLAUDE_CODE_PROMPT_CACHE_TTL`: as set
+3. the `promptCacheTtl` setting: as set
+4. an agent's frontmatter
+5. `ENABLE_PROMPT_CACHING_1H` (or its Bedrock twin): 1h
+6. otherwise **automatic: 1 hour on a Claude subscription within its usage limits; 5 minutes on
+   an API key, Bedrock, Vertex or Foundry**, and 5 minutes once the subscription is in overage.
+
+Subagents and helpers default to 5m (`subagentPromptCacheTtl`). So a subscriber already has the
+1h cache, chosen by Claude Code and withdrawn by it in overage, and an API-key user has 5m
+because every 1h write would cost them twice. cache-warmer overrides that by always setting the
+variable (to 1h by default), which also forces 1h writes on an API key and in overage. We do
+better by not touching it: the switch's `5m | 1h | auto` field defaults to `auto`, and only an
+explicit choice sets `CLAUDE_CODE_PROMPT_CACHE_TTL`.
+
+That leaves the warmer needing to **know** the lifetime, since its refresh timing depends on it
+(4m30s or 54m). Under `auto` the mod infers it the way Claude Code decides it: the three
+variables and the setting through `$.env.get` and `$.config.list()`, then the plan (the band
+already reads it for the limits: a subscription or an API key) and whether a limit is in
+overage (the band has the limit figures). One mistake costs one refresh: a refresh that reads
+under half the prefix found the cache gone, stops the chain, and from then the mod assumes 5m
+for the session and says so in the status line. Item 4 of §6 proves the inference on a
+subscription before the plan relies on it.
 
 ### 3.3 The chain, as ported
 
@@ -188,16 +210,25 @@ As with Agent-timed, a spike in a throwaway mod before any plan, into
    half the prompt tokens (the cache was warm), and the fork raises no `turn.*` hook and no
    `session.measure` of ours (so Auto compact and Agent-timed do not take it for a turn).
    Headless, with a 20-second timer.
-4. `$.env.set('CLAUDE_CODE_PROMPT_CACHE_TTL', '1h')` from a hook changes the next request's cache
-   lifetime: a refresh after 6 minutes still reads the cache. Interactive, seven minutes.
+4. The automatic lifetime, on the maintainer's subscription: with nothing set, a fork made from a
+   timer 6 minutes after the last prompt still reads the cache (`cache_read_input_tokens` at
+   least half the prompt tokens), so the lifetime was 1h; and with `FORCE_PROMPT_CACHING_5M=1`
+   the same fork reads nothing, so the inference's inputs are the right ones. Interactive, two
+   runs of seven minutes.
 5. `/config` rows from `userConfig` appear and their `config.set` hooks fire. Headless
    (`claude config set`).
 
-## 7. What to decide before a plan
+## 7. Decided, and what is left
 
-1. Third switch in the band (this design), or install cache-warmer beside the mod and only add
-   §4's limit-aware stop as a small hook in ours? The second is a tenth of the work and keeps
-   Clawd; it gives up the single switch and the savings in limit %.
-2. The lifetime default: Claude Code's 5m (this design) or cache-warmer's 1h.
-3. The limit threshold of §4.1, and whether it is a `/config` row.
-4. Whether the all-time totals (across sessions, in `$.store`) are wanted, or the session's alone.
+Decided by the maintainer on 2026-10-07:
+
+1. **The full merge** (§3), not cache-warmer beside the mod.
+2. **The lifetime default is `auto`**: Claude Code already gives a subscription the 1h cache
+   within its limits (§3.2); the mod follows that and sets nothing unless asked.
+
+Still open, with a proposed answer each:
+
+3. The limit threshold of §4.1: a `/config` row `usage-quota.warmUntil`, default 85% of either
+   window; past it no refresh is sent and the status line says why.
+4. All-time totals across sessions: kept, as cache-warmer keeps them, in `$.store` under
+   `warmAllTime`; the status line shows the session's, a press on it the all-time.
