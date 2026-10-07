@@ -21,14 +21,17 @@ One row that still shows the time left until each limit resets:
 ![The band, collapsed, above the prompt in the Claude desktop app](docs/collapsed-desktop.png)
 
 > [!TIP]
-> **Never hit a full context again: Auto compact, on by one click.**
-> With Auto compact on, the band compacts your session once the context reaches **80%** (the default; set **15 to 99**). Set it lower to compact sooner: a long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact now** button does it in one click.
+> **Never hit a full context again: Auto compact, on from the start.**
+> Auto compact is on in every new session and compacts it once the context reaches **80%** (set **15 to 99**). Set it lower to compact sooner: a long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact now** button does it in one click, and ends any hold Claude has.
 >
-> **Let Claude pick the moment: Agent-timed.** Switch on **Agent-timed** beside Auto compact and compaction starts sooner (from **30%** by default) but at a good moment: Claude can hold it through a debugging chain or a refactor, release it at a safe point, and leave itself a note that survives. Your Auto compact % stays the limit no hold can pass.
+> **Claude picks the moment: Agent-timed.** On by default too, Agent-timed starts compaction sooner (from **30%**) but at a good moment: Claude can hold it through a debugging chain or a refactor, release it at a safe point, and leave itself a note that survives. Every 5 minutes of a hold, Claude is asked to keep, release or update it. Your Auto compact % stays the limit no hold can pass.
 >
-> **Each session keeps its own settings**, even after a restart, so you can run them differently side by side:
+> **Pay less for every message: Keep cache warm.** Also on from the start. A small refresh keeps the conversation's prompt cache alive through a break, and while Claude waits on a subagent, so the next message reads the cache at a tenth of the price instead of writing it all again. The **Cache** dropdown in the top row picks the lifetime, **auto**, **5m** or **1h**, and the band shows what the warmer cost and saved, this session and all time.
+>
+> **Each session keeps its own settings**, through a restart and a `/clear`, so you can run them differently side by side:
 > - **Building something big?** Leave Auto compact at 80% or turn it off, so Claude keeps the whole picture. Press **Compact now** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
-> - **Everyday sessions?** Set Auto compact lower (say 30%), or switch on Agent-timed. They stay lean, and your 5 Hour and Weekly limits last longer.
+> - **Everyday sessions?** Set Auto compact lower (say 30%), or leave Agent-timed to it. They stay lean, and your 5 Hour and Weekly limits last longer.
+> - **A session that should send nothing extra?** Switch Keep cache warm off there; every refresh counts against your plan like any request.
 
 ## What it shows
 
