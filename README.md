@@ -22,12 +22,12 @@ One row that still shows the time left until each limit resets:
 
 > [!TIP]
 > **Never hit a full context again: Auto compact, on by one click.**
-> With Auto compact on, the band compacts your session once the context reaches **80%** (the default; set **15 to 99**). Set it lower to compact sooner: a long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact** button runs `/compact` in one click.
+> With Auto compact on, the band compacts your session once the context reaches **80%** (the default; set **15 to 99**). Set it lower to compact sooner: a long context costs more on every reply, so compacting early keeps replies **cheaper** and your limits **lasting longer**. Auto compact never interrupts a reply. Want to compact right now? The **Compact now** button does it in one click.
 >
 > **Let Claude pick the moment: Agent-timed.** Switch on **Agent-timed** beside Auto compact and compaction starts sooner (from **30%** by default) but at a good moment: Claude can hold it through a debugging chain or a refactor, release it at a safe point, and leave itself a note that survives. Your Auto compact % stays the limit no hold can pass.
 >
 > **Each session keeps its own settings**, even after a restart, so you can run them differently side by side:
-> - **Building something big?** Leave Auto compact at 80% or turn it off, so Claude keeps the whole picture. Press **Compact** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
+> - **Building something big?** Leave Auto compact at 80% or turn it off, so Claude keeps the whole picture. Press **Compact now** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
 > - **Everyday sessions?** Set Auto compact lower (say 30%), or switch on Agent-timed. They stay lean, and your 5 Hour and Weekly limits last longer.
 
 ## What it shows
@@ -50,7 +50,7 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 - **Amber at 50%**, **red at 80%**: the point to compact.
 
 **Compacting**
-- **Compact** runs `/compact` in one click.
+- **Compact now** compacts in one click. While Claude holds, it ends the hold too.
 - **Auto compact** runs at your % (80% by default, 15 to 99), never mid-reply. Each session keeps its own setting; a new session starts with it on, Agent-timed included.
 - **Agent-timed** (optional, beside Auto compact) lets Claude choose the moment below that %. See [Agent-timed](#agent-timed).
 
@@ -107,7 +107,7 @@ What Claude can do, through a small `compaction` tool the mod gives it:
 
 What you see and keep:
 
-- While Claude holds, the band says so: *Held by Claude 12m: mid-refactor of auth*, with **Compact now** and **Release** to overrule it.
+- While Claude holds, the band says so: *Held by Claude 12m: mid-refactor of auth*, with **Release** to overrule it, or **Compact now** to overrule it and compact.
 - Every **5 minutes** of a hold, Claude is asked where it stands: keep the hold with its current reason, release it, or leave a note.
 - Claude is told when the context passes the start %, so a compaction never comes unannounced.
 - While subagents Claude is waiting on are still running, compaction waits for them, up to your Auto compact %.

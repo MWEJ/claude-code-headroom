@@ -207,7 +207,7 @@ test('shows a refresh failure in the status line', async ($, on) => {
   expect(status).toContainEqual(expect.stringMatching(/^headroom: (?!claude-headroom).*no session/))
 })
 
-test('the Compact button runs /compact', async ($, on) => {
+test('the Compact now button runs /compact', async ($, on) => {
   const ran: string[] = []
   const clock = mock.clock(on, { now: NOW })
   mock.store(on)
@@ -547,7 +547,7 @@ test('the arrow collapses the band to one row of three bars, and back', async ($
     await ui.press({ key: 'collapse' })
     // the headline and Compact stay; the notes and categories go
     expect(await ui.find({ text: /^On track\./ })).toBeDefined()
-    expect(await ui.find(by({ type: 'Button', label: 'Compact' }))).toBeDefined()
+    expect(await ui.find(by({ type: 'Button', label: 'Compact now' }))).toBeDefined()
     expect(await ui.find(by({ type: 'Button', label: '▲' }))).toBeDefined()
     // the limits by short name, each with the time to its reset, in grey
     expect(await ui.find({ text: '5H' })).toBeDefined()
@@ -874,7 +874,7 @@ test('a narrow chat stacks the band and wraps its text, nothing cut off or dropp
     const head = await ui.find({ type: 'Text', text: /^On track\./ })
     expect(head?.props.wrap).toBe('wrap')
     for (const text of ['5 Hour', 'Weekly', 'Context', 'Messages', 'Tools', 'Other']) expect(await ui.find({ text })).toBeDefined()
-    expect(await ui.find(by({ type: 'Button', label: 'Compact' }))).toBeDefined()
+    expect(await ui.find(by({ type: 'Button', label: 'Compact now' }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^On pace for about/ }))?.props.wrap).toBe('wrap')
     await ui.press({ key: 'collapse' })
     for (const text of ['5H', 'W', 'Context']) expect(await ui.find({ text })).toBeDefined()

@@ -439,7 +439,7 @@ test('the band: switched on past the start %, it asks first', async ($, on) => {
   await ui.unmount()
 })
 
-test('the band: the hold shows with who, how long and why; Release and Compact now end it', async ($, on) => {
+test('the band: the hold shows with who, how long and why; Release ends it, and the one Compact now button ends it and compacts', async ($, on) => {
   const percent = { value: 20 }
   const { clock, seen } = world(on, percent)
   await $.session.start(START)
@@ -464,7 +464,7 @@ test('the band: the hold shows with who, how long and why; Release and Compact n
   await into($, clock, percent, 35)
   await tool($, { action: 'hold', reason: 'x'.repeat(200) })
   expect((await ui.find({ type: 'Text', text: /^Held by Claude/ }))?.text).toBe(`Held by Claude 0m: ${'x'.repeat(79)}…`)
-  await ui.press({ key: 'holdCompact' })
+  await ui.press({ key: 'compact' })
   expect(await ui.find({ type: 'Text', text: 'Compacting when this turn ends' })).toBeDefined()
   expect(seen.compacted).toHaveLength(1)
   await end($, clock)
@@ -579,4 +579,22 @@ test('while holding: every 5 minutes the agent is asked where the hold stands, a
   await tool($, { action: 'release' })
   await clock.advance(10 * 60_000)
   expect(await bash($)).toEqual([])
+})
+
+test('a session started again in the same chat (a reload) keeps the hold and the note; another chat starts over', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock } = world(on, percent)
+  // the chat's id, as the session answers it: changed below for "another chat"
+  let chat = 'chat'
+  on('session.id', () => ({ value: chat }) as never)
+  await $.session.start(START)
+  await into($, clock, percent, 35)
+  await tool($, { action: 'hold', reason: 'mid-refactor of auth', note: 'step 3 next' })
+
+  await $.session.start(START)
+  expect(await tool($, { action: 'status' })).toStartWith('hold: mid-refactor of auth')
+
+  chat = 'other'
+  await $.session.start(START)
+  expect(await tool($, { action: 'status' })).toStartWith('hold: none\nnote: none')
 })

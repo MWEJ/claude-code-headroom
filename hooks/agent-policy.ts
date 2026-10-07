@@ -44,6 +44,7 @@ export const NUDGE_EVERY = 10
 export const HOLD_REMIND_MS = 5 * 60_000
 
 export const EMPTY: AgentTimed = {
+  chat: null,
   hold: null,
   note: null,
   isAsked: false,

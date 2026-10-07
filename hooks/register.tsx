@@ -660,7 +660,7 @@ async function afterCompaction($: EngineInterface): Promise<void> {
   // the cache the chain kept is the old conversation's: the next response starts one afresh
   await forget($, 'conversation compacted')
   const state = await read($, agentTimed)
-  await update($, agentTimed, () => EMPTY)
+  await update($, agentTimed, s => ({ ...EMPTY, chat: s.chat }))
   const text = afterText(state.note, state.overridden, capOf(await read($, autoCompact)))
   if (text !== null) await tell($, text)
 }
@@ -850,8 +850,9 @@ async function loadAuto($: EngineInterface): Promise<void> {
   const auto: AutoCompact = saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : DEFAULT_AUTO
   await update($, autoCompact, () => auto)
   await update($, autoAsk, () => null)
-  // another chat: what the agent held, noted or asked for belonged to the last one
-  await update($, agentTimed, () => EMPTY)
+  // another chat: what the agent held, noted or asked for belonged to the last one. A
+  // reload of the module is not another chat: the state keeps the hold and the note
+  if ((await read($, agentTimed)).chat !== id) await update($, agentTimed, () => ({ ...EMPTY, chat: id }))
   if (isTimed(auto)) await ensureTool($)
   await loadWarm($, id)
 }
@@ -1466,11 +1467,18 @@ async function setTimed($: EngineInterface, isAgentTimed: boolean): Promise<void
     await askIfPast($, next.startAt, `Agent-timed from ${next.startAt}% to ${capOf(next)}% context`)
     return
   }
-  await update($, agentTimed, () => EMPTY)
+  await update($, agentTimed, s => ({ ...EMPTY, chat: s.chat }))
   await askIfPast($, capOf(next), 'Agent-timed off')
 }
 
 // the person ends the agent's hold from the band: compact now, or let the rule decide
+// the band's one compact button: with the agent holding, the hold ends and the rule
+// compacts (at once idle, at the turn's end mid-turn); else /compact runs
+async function pressCompact($: EngineInterface): Promise<void> {
+  if ((await read($, agentTimed)).hold) await endHold($, true)
+  else compactNow($)
+}
+
 async function endHold($: EngineInterface, isCompactNow: boolean): Promise<void> {
   await update($, agentTimed, s => ({ ...s, hold: null, isAsked: isCompactNow || s.isAsked }))
   await watchAuto($, lastPercent)
@@ -1908,7 +1916,7 @@ export const register: Register = (on, options) => {
     // (the desktop's letters are narrower than its cells: about 0.8 of one)
     // (the Agent-timed switch and its name add 14 cells, its "from" and field 10 more;
     // Keep cache warm's switch and name 18, the lifetime dropdown 12)
-    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0) + 18 + 12
+    const CONTROLS = 44 + (auto.isOn ? (timed ? 24 : 14) : 0) + 18 + 12
     // the terminal draws its own hide control ([-]) over the band's top-right
     // corner: the first row keeps clear of it
     const HOST_HIDE = Svg ? 0 : 4
@@ -1933,7 +1941,7 @@ export const register: Register = (on, options) => {
     const holdWords = held
       ? `Held by Claude ${duration(now - held.since)}: ${held.reason.length > REASON_SHOWN ? `${held.reason.slice(0, REASON_SHOWN - 1)}…` : held.reason}`
       : ''
-    const HOLD_LABELS = ['Compact now', 'Release']
+    const HOLD_LABELS = ['Release']
     const isHoldLine = width >= (holdWords.length + HOLD_LABELS.join('').length) * (Svg ? 0.8 : 1) + HOLD_LABELS.length * (Svg ? 3 : 4) + 2
 
     // an iOS-style switch on the desktop, a dot on the terminal; `key` names its press
@@ -1999,7 +2007,7 @@ export const register: Register = (on, options) => {
         {Select ? <Select key="cacheTtl" label="Cache" options={TTL_OPTIONS} value={warmSet.ttl} onSelect={value => void chooseTtl($, value)} /> : null}
         {/* a wide gap, so the fields read as the switches', not Compact's */}
         <Box key="compactBox" marginLeft={isHeadBeside ? 2 : 0}>
-          <Button key="compact" label="Compact" hover={{ backgroundColor: COMPACT_LIT }} onPress={() => compactNow($)} />
+          <Button key="compact" label="Compact now" hover={{ backgroundColor: COMPACT_LIT }} onPress={() => void pressCompact($)} />
         </Box>
         <Button
           key="collapse"
@@ -2230,7 +2238,6 @@ export const register: Register = (on, options) => {
     const holdText = held ? <Text color={AMBER} wrap="wrap">{holdWords}</Text> : null
     const holdButtons = (
       <Box flexDirection="row" columnGap={1} flexWrap="wrap" flexShrink={0}>
-        <Button key="holdCompact" label="Compact now" onPress={() => void endHold($, true)} />
         <Button key="holdRelease" label="Release" onPress={() => void endHold($, false)} />
       </Box>
     )
