@@ -1,12 +1,19 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
+import type { EngineInterface, ModelForkResult, ModelUsage, Register, SessionRateLimit, TurnUsage } from 'claude-code'
 
-import type { AgentTimed, AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
+import type { AgentTimed, AutoCompact, Category, Limit, PaceOf, Snapshot, Ttl, TtlChoice, Warm, WarmAnchor, WarmRate, WarmSetting, WarmTotals } from '../types'
 import {
   AT_DEFAULT, EMPTY, REASON_SHOWN, START_DEFAULT, START_MIN, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
   afterText, answerTool, breakpointOf, breakpointText, capOf, decide, isTimed, nudgeLevel, nudgeText, startOf, stepNudge, toldText, withNote,
 } from './agent-policy'
 import type { Stuck, ToolInput } from './agent-policy'
+import {
+  DEFAULT_OUTPUT_TOKENS, FORK_PROMPT, IDLE_LIMIT_DEFAULT, TTL_MS, WARM_UNTIL_DEFAULT, ZERO_TOTALS,
+  addRate, addTotals, cacheLineOf, costOf, deadlineOf, decide as decideWarm, delayOf, formatDuration, formatTokens, formatUsd, horizonOf, idleStopNotice,
+  idleStopReason, isEnvOn, isTtlChoice, jumpsOf, limitOf, missCostOf, nextChoice, noticeText, outcomeOf, pastLimitOf, planOf, ttlOf,
+  usageOf, warmUntilOf,
+} from './cache-policy'
+import type { ForkReply, Refresh } from './cache-policy'
 
 const snapshot = atom({ plugin: 'usage-quota', key: 'snapshot' } as const, null)
 const isOn = atom({ plugin: 'usage-quota', key: 'isOn' } as const, true)
@@ -22,6 +29,23 @@ const startTick = atom({ plugin: 'usage-quota', key: 'startTick' } as const, 0)
 const startText = atom({ plugin: 'usage-quota', key: 'startText' } as const, null as string | null)
 const theme = atom({ plugin: 'usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
 const autoAsk = atom({ plugin: 'usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+// Keep cache warm: the session's chain, lifetime, totals and rate; and this chat's switch
+const WARM_EMPTY: Warm = {
+  chat: null,
+  anchor: null,
+  status: { state: 'waiting' },
+  isRunning: false,
+  outputTokens: DEFAULT_OUTPUT_TOKENS,
+  isLocked: false,
+  ttl: '5m',
+  assumed: null,
+  totals: ZERO_TOTALS,
+  allTime: { ...ZERO_TOTALS, since: 0 },
+  rate: {},
+  lastLimits: null,
+}
+const warm = atom({ plugin: 'usage-quota', key: 'warm' } as const, WARM_EMPTY)
+const warmSetting = atom({ plugin: 'usage-quota', key: 'warmSetting' } as const, { isOn: false, ttl: 'auto' } as WarmSetting)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -633,6 +657,8 @@ let isCompactionHandled = false
 // note back, and word of a hold the cap ended, once.
 async function afterCompaction($: EngineInterface): Promise<void> {
   isCompactionHandled = true
+  // the cache the chain kept is the old conversation's: the next response starts one afresh
+  await forget($, 'conversation compacted')
   const state = await read($, agentTimed)
   await update($, agentTimed, () => EMPTY)
   const text = afterText(state.note, state.overridden, capOf(await read($, autoCompact)))
@@ -818,6 +844,457 @@ async function loadAuto($: EngineInterface): Promise<void> {
   // another chat: what the agent held, noted or asked for belonged to the last one
   await update($, agentTimed, () => EMPTY)
   if (saved && isTimed(saved)) await ensureTool($)
+  await loadWarm($, id)
+}
+
+// Keep cache warm, the part that touches the engine: the chain of refreshes (ported
+// from cache-warmer's register.tsx, MIT, see cache-policy.ts), the lifetime, the totals
+// and the rate the band learns. The prices, the rule and the words are
+// cache-policy.ts's; this stays here because the engine follows $ only into functions
+// declared in this file.
+
+// set from the /config rows when the module loads, and by their config.set hooks
+let idleLimits: Record<Ttl, number> = { '5m': IDLE_LIMIT_DEFAULT, '1h': IDLE_LIMIT_DEFAULT }
+let warmUntil = WARM_UNTIL_DEFAULT
+let defaultChoice: TtlChoice = 'auto'
+let warmTimer: { cancel(): void } | undefined
+// The anchor a refresh has claimed until chain() records it: a schedule() meanwhile,
+// from a turn that ended, cannot fork it again
+let forking: { at: number } | undefined
+// main prompts started this process: a warning from before the latest one is stale
+let prompts = 0
+// the lifetime this mod put in the variable (null: none), and what was there before it
+let envSet: Ttl | null = null
+let envBefore: string | undefined
+// the live window's last response as refresh() last read it, and when: what anchors stand on
+let lastApi: ModelUsage | null = null
+let lastApiAt = -Infinity
+// the response the anchor stands on: the same counts read again are no new response
+let anchoredApi = ''
+// what refreshes spent since the last main turn ended: the meter's next jump holds it too
+let spentSince = 0
+
+// the variables Claude Code picks the lifetime by, each named outright (the engine lists
+// what a module reads); one that cannot be read counts as unset
+async function lifetimeVars($: EngineInterface): Promise<{ force5m?: string; ttl?: string; enable1h?: string }> {
+  const vars: { force5m?: string; ttl?: string; enable1h?: string } = {}
+  try {
+    vars.force5m = await $.env.get('FORCE_PROMPT_CACHING_5M')
+    vars.ttl = await $.env.get('CLAUDE_CODE_PROMPT_CACHE_TTL')
+    vars.enable1h = await $.env.get('ENABLE_PROMPT_CACHING_1H')
+  } catch {
+    // the environment cannot be read: Claude Code's own default stands
+  }
+  return vars
+}
+
+// the promptCacheTtl setting; no row listed reads as unset
+async function settingTtlOf($: EngineInterface): Promise<string | undefined> {
+  try {
+    const row = (await $.config.list()).find(r => r.key === 'promptCacheTtl')
+    return row === undefined ? undefined : String(row.value)
+  } catch {
+    return undefined
+  }
+}
+
+// The lifetime in force, as Claude Code decides it (cache-policy's ttlOf), unless a
+// refresh found a 1h cache gone: then 5m for the rest of the session
+async function lifetimeOf($: EngineInterface, limits: readonly Limit[]): Promise<Ttl> {
+  const { assumed } = await read($, warm)
+  if (assumed) return assumed
+  const vars = await lifetimeVars($)
+  return ttlOf(
+    { force5m: isEnvOn(vars.force5m), envTtl: vars.ttl, settingTtl: await settingTtlOf($), enable1h: isEnvOn(vars.enable1h), ...planOf(limits) },
+    envSet ?? 'auto',
+  )
+}
+
+// A chosen 5m or 1h goes in the variable, for the process, from the next request; auto
+// (or warming off) puts back what was there. Once the first response wrote the cache
+// its lifetime holds for the session, as cache-warmer has it: a change waits for a new
+// one, and a press says so (`isPressed`)
+async function applyTtl($: EngineInterface, isPressed: boolean): Promise<void> {
+  const setting = await read($, warmSetting)
+  const want = setting.isOn && setting.ttl !== 'auto' ? setting.ttl : null
+  if (want === envSet) return
+  const state = await read($, warm)
+  if (state.isLocked) {
+    if (isPressed) $.ui.toast(`Cache lifetime ${setting.ttl} applies to new sessions: this one's cache is written at ${state.ttl}`)
+    return
+  }
+  try {
+    if (envSet === null) envBefore = (await lifetimeVars($)).ttl
+    await $.env.set('CLAUDE_CODE_PROMPT_CACHE_TTL', want ?? envBefore)
+    envSet = want
+  } catch (error) {
+    $.ui.log(`usage-quota: the cache lifetime could not be set: ${reasonOf(error)}`, { to: 'debug' })
+  }
+}
+
+// a notice row: the transcript keeps it, no request carries it; the debug log has every
+// one, appended or not (a test cannot see a plugin's rows)
+async function cacheRow($: EngineInterface, text: string): Promise<void> {
+  let outcome = 'appended'
+  try {
+    const row = await $.session.append({ message: { type: 'system', content: [{ type: 'text', text }] } })
+    if (row.deny !== undefined) outcome = `not appended: ${row.deny}`
+  } catch (error) {
+    outcome = `not appended: ${reasonOf(error)}`
+  }
+  $.ui.log(`usage-quota: cache row (${outcome}): ${text}`, { to: 'debug' })
+}
+
+// this session's totals and the all-time ones in the store take the same delta
+async function addToTotals($: EngineInterface, delta: Partial<WarmTotals>): Promise<void> {
+  await update($, warm, s => ({ ...s, totals: addTotals(s.totals, delta) }))
+  const stored = (await storeGet<Warm['allTime']>($, 'warmAllTime')) ?? { ...ZERO_TOTALS, since: await $.clock.now() }
+  const allTime = addTotals(stored, delta)
+  await storeSet($, 'warmAllTime', allTime)
+  await update($, warm, s => ({ ...s, allTime }))
+}
+
+async function reportStop($: EngineInterface, reason: string, isPaused = false): Promise<void> {
+  await update($, warm, s => ({ ...s, status: isPaused ? { state: 'stopped' as const, reason, isPaused } : { state: 'stopped' as const, reason } }))
+  $.ui.log(`usage-quota: cache warming stopped: ${reason}`, { to: 'debug' })
+}
+
+// Compaction, /clear, a session's end and a model switch forget the chain: only the
+// next response starts it again, and its fee is wasted now, since no prompt will judge it
+async function forget($: EngineInterface, reason: string): Promise<void> {
+  warmTimer?.cancel()
+  warmTimer = undefined
+  const { anchor } = await read($, warm)
+  if (anchor && anchor.feeUsd > 0) await addToTotals($, { wastedUsd: anchor.feeUsd })
+  await update($, warm, s => ({ ...s, anchor: null }))
+  await reportStop($, reason)
+}
+
+// Stops the chain anchored at `at`, adding `feeUsd` to it, until the next response; a
+// response that replaced it meanwhile keeps its own warming. Answers whether it stopped it
+async function stopChain($: EngineInterface, at: number, reason: string, feeUsd = 0, isPaused = false): Promise<boolean> {
+  let isStopped = false
+  await update($, warm, s => {
+    const { anchor } = s
+    isStopped = anchor?.at === at && !anchor.isStopped
+    if (!anchor || !isStopped) return s
+    return { ...s, anchor: { ...anchor, feeUsd: anchor.feeUsd + feeUsd, isStopped: true } }
+  })
+  if (isStopped) await reportStop($, reason, isPaused)
+  return isStopped
+}
+
+// a limit at or past warmUntil: no refresh spends more of it
+async function pastLimit($: EngineInterface): Promise<string | null> {
+  return pastLimitOf((await read($, snapshot))?.limits ?? [], warmUntil)
+}
+
+// The next refresh, at 90% of the lifetime after the last request or refresh, if warming
+// is on and one pays. A running turn stops at the run horizon, an idle session after its
+// lifetime's idle limit. The anchor is read last, so the timer is set from it as it stands
+async function schedule($: EngineInterface): Promise<void> {
+  const prompt = prompts
+  if (!(await read($, warmSetting)).isOn) return
+  const past = await pastLimit($)
+  const now = await $.clock.now()
+  const { anchor: current, isRunning, outputTokens } = await read($, warm)
+  if (!current || current.isStopped || current.at === forking?.at) return
+  const phase: 'run' | 'idle' = isRunning ? 'run' : 'idle'
+  const nextAt = current.lastAt + delayOf(current.ttl)
+  const horizon = horizonOf(current.ttl)
+  if (phase === 'run' && nextAt > current.at + horizon) {
+    await stopChain($, current.at, `${formatDuration(horizon)} run limit reached`)
+    return
+  }
+  if (past) {
+    await stopChain($, current.at, past, 0, true)
+    return
+  }
+  const limit = idleLimits[current.ttl]
+  if (phase === 'idle' && current.idleRefreshes >= limit) {
+    const expiresAt = current.lastAt + TTL_MS[current.ttl]
+    // a limit of 0 turned idle warming off on purpose: it needs no warning
+    const isStopped = await stopChain($, current.at, limit > 0 ? idleStopReason(limit, expiresAt) : 'no idle refreshes (set to 0)')
+    if (isStopped && limit > 0 && prompt === prompts) await cacheRow($, idleStopNotice(current.ttl, limit, expiresAt))
+    return
+  }
+  const decision = decideWarm(current.model, current.promptTokens, current.ttl, phase, outputTokens)
+  if (!decision) {
+    await stopChain($, current.at, `no price for ${current.model}`)
+    return
+  }
+  if (decision.reason) {
+    await stopChain($, current.at, decision.reason)
+    return
+  }
+  warmTimer?.cancel()
+  warmTimer = $.clock.after(Math.max(0, nextAt - now), () => void refreshCache($))
+  await update($, warm, s => ({ ...s, status: { state: 'scheduled' as const, nextAt, phase, expectedUsd: decision.expectedUsd } }))
+  $.ui.log(`usage-quota: cache refresh in ${formatDuration(nextAt - now)} (${current.ttl}, ${phase}, expected saving ${formatUsd(decision.expectedUsd)})`, { to: 'debug' })
+}
+
+// the timer's refresh: it claims its anchor until chain() records it there
+async function refreshCache($: EngineInterface): Promise<void> {
+  warmTimer = undefined
+  if (!(await read($, warmSetting)).isOn) return
+  const { anchor: current, isRunning, outputTokens } = await read($, warm)
+  if (!current || current.isStopped || current.at === forking?.at) return
+  const claim = { at: current.at }
+  forking = claim
+  try {
+    await forkFor($, current, isRunning ? 'run' : 'idle', outputTokens)
+  } finally {
+    if (forking === claim) forking = undefined
+  }
+}
+
+async function forkFor($: EngineInterface, current: WarmAnchor, phase: 'run' | 'idle', outputTokens: number): Promise<void> {
+  const at = await $.clock.now()
+  if (at > deadlineOf(current.lastAt, current.ttl)) {
+    await stopChain($, current.at, 'refresh deadline missed')
+    return
+  }
+  const past = await pastLimit($)
+  if (past) {
+    await stopChain($, current.at, past, 0, true)
+    return
+  }
+  const decision = decideWarm(current.model, current.promptTokens, current.ttl, phase, outputTokens)
+  if (!decision || decision.reason) {
+    await stopChain($, current.at, decision?.reason ?? `no price for ${current.model}`)
+    return
+  }
+  await update($, warm, s => ({ ...s, status: { state: 'refreshing' as const } }))
+  let reply: ModelForkResult
+  try {
+    reply = await $.model.fork({ prompt: FORK_PROMPT })
+  } catch (error) {
+    await stopChain($, current.at, `refresh failed (${reasonOf(error)})`)
+    return
+  }
+  if (!reply.isAnswered && reply.reason === 'nothing-to-fork') {
+    await stopChain($, current.at, 'nothing to refresh')
+    return
+  }
+  await settle($, current, at, phase, decision.missUsd, reply)
+}
+
+async function settle($: EngineInterface, current: WarmAnchor, at: number, phase: 'run' | 'idle', missUsd: number, reply: ForkReply): Promise<void> {
+  const usage = usageOf(reply.usage)
+  // the fork's own write is its short tail: priced at the cache's lifetime it is overstated at most
+  const costUsd = costOf(current.model, usage, current.ttl)
+  const outcome = outcomeOf(reply, usage, current.promptTokens)
+  const savesUsd = outcome.result === 'warmed' && costUsd !== null ? missUsd - costUsd : null
+  const entry: Refresh = { at, model: current.model, usage, costUsd, savesUsd, ...outcome }
+  await addToTotals($, { refreshes: 1, costUsd: costUsd ?? 0 })
+  spentSince += costUsd ?? 0
+  await cacheRow($, noticeText(current.ttl, entry))
+  await chain($, current, entry, phase)
+}
+
+// moves a warm refresh's chain on, when the chain is still current; answers whether it was
+async function extend($: EngineInterface, current: WarmAnchor, entry: Refresh, phase: 'run' | 'idle'): Promise<boolean> {
+  let isChained = false
+  await update($, warm, s => {
+    const { anchor } = s
+    isChained = anchor?.at === current.at && !anchor.isStopped
+    if (!anchor || !isChained) return s
+    return {
+      ...s,
+      outputTokens: entry.usage?.output || DEFAULT_OUTPUT_TOKENS,
+      anchor: {
+        ...anchor,
+        lastAt: entry.at,
+        refreshes: anchor.refreshes + 1,
+        idleRefreshes: anchor.idleRefreshes + (phase === 'idle' ? 1 : 0),
+        feeUsd: anchor.feeUsd + (entry.costUsd ?? 0),
+      },
+    }
+  })
+  return isChained
+}
+
+// The chain carries each refresh's fee. One a response overtook during its fork kept
+// nothing that response read, so its fee is wasted; so is one whose chain was forgotten.
+// A 1h cache a refresh found gone means the lifetime was 5m: assumed so from then
+async function chain($: EngineInterface, current: WarmAnchor, entry: Refresh, phase: 'run' | 'idle'): Promise<void> {
+  const costUsd = entry.costUsd ?? 0
+  const isWarmed = entry.result === 'warmed'
+  const isAssumed = entry.result === 'expired' && current.ttl === '1h'
+  const reason =
+    entry.result === 'expired'
+      ? isAssumed ? 'the cache had expired: 5m assumed for this session' : 'the cache had expired'
+      : `refresh failed${entry.detail ? ` (${entry.detail})` : ''}`
+  if (isAssumed) {
+    await update($, warm, s => ({
+      ...s,
+      assumed: '5m' as const,
+      ttl: '5m' as const,
+      anchor: s.anchor && s.anchor.at === current.at ? { ...s.anchor, ttl: '5m' as const } : s.anchor,
+    }))
+  }
+  const isChained = isWarmed ? await extend($, current, entry, phase) : await stopChain($, current.at, reason, costUsd)
+  if (forking?.at === current.at) forking = undefined
+  if (!isChained) {
+    if (costUsd > 0) await addToTotals($, { wastedUsd: costUsd })
+    if ((await read($, warm)).status.state === 'refreshing') await update($, warm, s => ({ ...s, status: { state: 'waiting' as const } }))
+    await schedule($)
+    return
+  }
+  if (isWarmed) await schedule($)
+}
+
+// A prompt is kept when it read a cache that would have expired without the refreshes
+// since the last one; it avoided rewriting what it read. Otherwise the chain's fee is wasted
+async function judgeChain($: EngineInterface, previous: WarmAnchor | null, at: number, cacheRead: number): Promise<void> {
+  if (!previous) return
+  const isKept = previous.refreshes > 0 && at - previous.at > TTL_MS[previous.ttl] && cacheRead >= previous.promptTokens / 2
+  const keptUsd = isKept ? missCostOf(previous.model, cacheRead, previous.ttl) : null
+  if (keptUsd !== null) await addToTotals($, { kept: 1, keptUsd })
+  else if (previous.feeUsd > 0) await addToTotals($, { wastedUsd: previous.feeUsd })
+}
+
+// A response of the main conversation was seen (the live window's counts moved): the
+// chain before it is judged, and a new one starts from it. `model`: the turn's at its
+// end; mid-turn the anchor's own (a fork's response is not the live window's)
+async function anchorOn($: EngineInterface, api: ModelUsage, at: number, model: string | undefined): Promise<boolean> {
+  const key = JSON.stringify(api)
+  const promptTokens = api.input_tokens + api.cache_read_input_tokens + api.cache_creation_input_tokens
+  if (key === anchoredApi || promptTokens <= 0) return false
+  const previous = (await read($, warm)).anchor
+  const named = model ?? previous?.model
+  if (named === undefined) return false
+  anchoredApi = key
+  await judgeChain($, previous, at, api.cache_read_input_tokens)
+  const { ttl } = await read($, warm)
+  await update($, warm, s => ({
+    ...s,
+    anchor: { at, lastAt: at, model: named, promptTokens, ttl, refreshes: 0, idleRefreshes: 0, feeUsd: 0, isStopped: false },
+  }))
+  $.ui.log(`usage-quota: cache anchor: ${formatTokens(promptTokens)} tokens on ${named} at ${ttl}`, { to: 'debug' })
+  return true
+}
+
+// mid-turn, each read of a new response moves the chain on: a long turn's own requests
+// keep the cache warm, and a refresh is due only after its last
+async function touchWarm($: EngineInterface, api: ModelUsage | null, now: number): Promise<void> {
+  lastApi = api
+  lastApiAt = now
+  if (api && isBusy && (await anchorOn($, api, now, undefined))) await schedule($)
+}
+
+async function apiNow($: EngineInterface): Promise<ModelUsage | null> {
+  try {
+    return (await $.session.usage({ breakdown: 'summary' })).context.breakdown?.apiUsage ?? null
+  } catch {
+    return null
+  }
+}
+
+// What a plan's meter moves per dollar, learned at each main turn's end: the jump of
+// each window since the last turn end, against the turn's dollars and the refreshes'
+// since. Kept in the store, so a reopened chat has a rate from its first prompt
+async function learnRate($: EngineInterface, usage: TurnUsage, ttl: Ttl, limits: Limit[]): Promise<void> {
+  const before = (await read($, warm)).lastLimits
+  const turnUsd = costOf(usage.model, usageOf(usage), ttl)
+  const usd = (turnUsd ?? 0) + spentSince
+  spentSince = 0
+  if (limits.length > 0) await update($, warm, s => ({ ...s, lastLimits: limits }))
+  const jumps = jumpsOf(before, limits)
+  if (turnUsd === null || Object.keys(jumps).length === 0) {
+    $.ui.log(`usage-quota: cache rate: nothing measured (${turnUsd === null ? `no price for ${usage.model}` : 'no earlier reading of the same window'})`, { to: 'debug' })
+    return
+  }
+  const rate = addRate((await storeGet<WarmRate>($, 'warmRate')) ?? (await read($, warm)).rate, jumps, usd)
+  await update($, warm, s => ({ ...s, rate }))
+  await storeSet($, 'warmRate', rate)
+  const moved = Object.entries(jumps).map(([kind, jump]) => `${kind} +${jump.toFixed(1)}%`).join(', ')
+  const sums = Object.entries(rate).map(([kind, r]) => `${kind} ${r.jump.toFixed(1)}% / ${formatUsd(r.usd)}`).join(', ')
+  $.ui.log(`usage-quota: cache rate: ${moved} for ${formatUsd(usd)} (${usage.model}); sums ${sums}`, { to: 'debug' })
+}
+
+// A main turn ended: the first one locks the lifetime, the lifetime in force is
+// inferred again, the rate learns the turn, and the chain stands on its last response.
+// `endedAt`: when the turn ended, so a reading of the counts from before it is not used
+async function warmTurnEnd($: EngineInterface, usage: TurnUsage | undefined, endedAt: number): Promise<void> {
+  await update($, warm, s => ({ ...s, isRunning: false }))
+  const limits = (await read($, snapshot))?.limits ?? []
+  if (usage) {
+    // the first response wrote the cache: its lifetime holds for the session
+    if (!(await read($, warm)).isLocked) await update($, warm, s => ({ ...s, isLocked: true }))
+    const ttl = await lifetimeOf($, limits)
+    await update($, warm, s => ({ ...s, ttl }))
+    await learnRate($, usage, ttl, limits)
+  }
+  const api = lastApiAt >= endedAt ? lastApi : await apiNow($)
+  if (api) {
+    await anchorOn($, api, endedAt, usage?.model)
+    // a mid-turn anchor took the last model and lifetime: the turn names them
+    const { anchor, ttl } = await read($, warm)
+    if (usage && anchor && !anchor.isStopped && (anchor.model !== usage.model || anchor.ttl !== ttl)) {
+      await update($, warm, s => (s.anchor ? { ...s, anchor: { ...s.anchor, model: usage.model, ttl } } : s))
+      $.ui.log(`usage-quota: cache anchor: ${formatTokens(anchor.promptTokens)} tokens on ${usage.model} at ${ttl}`, { to: 'debug' })
+    }
+  }
+  await schedule($)
+}
+
+// the chat's switch and lifetime, kept per chat; a chat that never set them starts off,
+// at the /config default lifetime. Another chat starts its chain and totals afresh
+async function loadWarm($: EngineInterface, id: string): Promise<void> {
+  const saved = await storeGet<WarmSetting>($, `warm:${id}`)
+  await update($, warmSetting, () => ({ isOn: saved?.isOn === true, ttl: isTtlChoice(saved?.ttl) ? saved.ttl : defaultChoice }))
+  const state = await read($, warm)
+  if (state.chat !== id) {
+    if (state.anchor) await forget($, 'another conversation')
+    warmTimer?.cancel()
+    warmTimer = undefined
+    await update($, warm, s => ({
+      ...s, chat: id, anchor: null, status: { state: 'waiting' as const }, isRunning: false, isLocked: false, assumed: null, totals: ZERO_TOTALS, lastLimits: null,
+    }))
+  }
+  await applyTtl($, false)
+  // a reload stops the timers: the chain kept in state is armed again
+  await schedule($)
+}
+
+// what every chat shares: the all-time totals and the learned rate
+async function loadWarmStore($: EngineInterface): Promise<void> {
+  const allTime = (await storeGet<Warm['allTime']>($, 'warmAllTime')) ?? { ...ZERO_TOTALS, since: await $.clock.now() }
+  const rate = (await storeGet<WarmRate>($, 'warmRate')) ?? {}
+  await update($, warm, s => ({ ...s, allTime, rate }))
+}
+
+async function saveWarm($: EngineInterface, next: WarmSetting): Promise<void> {
+  await update($, warmSetting, () => next)
+  await storeSet($, `warm:${autoChat ?? (await chatId($))}`, next)
+}
+
+// the switch: on arms the chain from the last response, off stops the timer (the chain
+// is judged by the next prompt as ever)
+async function setWarm($: EngineInterface, isOn: boolean): Promise<void> {
+  await saveWarm($, { ...(await read($, warmSetting)), isOn })
+  await applyTtl($, false)
+  if (isOn) {
+    $.ui.toast('Keep cache warm: a small request refreshes the cache before it expires, counted against your plan like any request')
+    await schedule($)
+    return
+  }
+  warmTimer?.cancel()
+  warmTimer = undefined
+  await update($, warm, s => ({ ...s, status: { state: 'waiting' as const } }))
+}
+
+// the lifetime button: auto, 5m, 1h, auto
+async function cycleTtl($: EngineInterface): Promise<void> {
+  const setting = await read($, warmSetting)
+  await saveWarm($, { ...setting, ttl: nextChoice(setting.ttl) })
+  await applyTtl($, true)
+}
+
+// a new idle limit or warmUntil applies to the warming under way
+async function rescheduleWarm($: EngineInterface): Promise<void> {
+  if ((await read($, warm)).status.state === 'scheduled') await schedule($)
 }
 
 // the % field sets on Enter, or when the focus leaves it with an unset draft (a
@@ -1071,6 +1548,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     const usage = await $.session.usage({ breakdown: 'summary' })
     const { context } = usage
     const breakdown = context.breakdown
+    await touchWarm($, breakdown?.apiUsage ?? null, now)
     const all = (breakdown?.categories ?? []).filter(c => c.kind !== 'deferred' && c.tokens > 0)
     const rough = sumGroups(all)
     if (context.tokens === undefined) {
@@ -1152,7 +1630,12 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // the /config rows: the lifetime new chats start with, the idle limits, warmUntil
+  defaultChoice = isTtlChoice(options.cacheTtl) ? options.cacheTtl : 'auto'
+  idleLimits = { '5m': limitOf(options.idle5m), '1h': limitOf(options.idle1h) }
+  warmUntil = warmUntilOf(options.warmUntil)
+
   // the mod's own tool: no permission prompt stands between the agent and a hold
   on('tool.check', { tool: 'mcp__usage-quota__compaction' }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
 
@@ -1200,6 +1683,7 @@ export const register: Register = on => {
     } catch {
       calib = {}
     }
+    await loadWarmStore($)
     await loadAuto($)
     await syncCollapsed($)
     // a chat just opened: its limits now, unless another chat asked a moment ago
@@ -1243,6 +1727,8 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     isBusy = true
+    prompts += 1
+    await update($, warm, s => ({ ...s, isRunning: true }))
     // told at the end of the last turn: this turn is the agent's chance to hold
     if ((await read($, agentTimed)).told === 'next') await update($, agentTimed, s => ({ ...s, told: 'yes' as const }))
     if (isOpening) {
@@ -1260,17 +1746,67 @@ export const register: Register = on => {
     const result = await next(e)
     // a subagent's turn ending: the main turn goes on, so nothing here is over yet
     if (e.agentId !== undefined) return result
+    const endedAt = await $.clock.now()
     await refresh($)
     // the first reply is done: whatever it used, the jump is behind it
     spikeFrom = undefined
     // the turn is over: auto compact may fire now, never mid-reply
     isBusy = false
+    // the cache chain stands on the turn's last response, read by the refresh just made
+    await warmTurnEnd($, e.usage, endedAt)
     // interrupted or failed: what the agent asked for at this turn's end no longer stands
     if (e.reason !== 'answer') await dropAsked($)
     const snap = await read($, snapshot)
     if (snap) await watchAuto($, snap.percent)
     return result
   })
+
+  // Keep cache warm forgets its chain wherever the cache it kept stops being the one the
+  // next request reads: the session ending (a /clear also lets the lifetime change
+  // again), and a model switch (each model has its own cache)
+  on('session.end', async ($, e, next) => {
+    if (e.reason === 'clear') {
+      await forget($, 'conversation cleared')
+      await update($, warm, s => ({ ...s, isLocked: false, assumed: null }))
+    } else await forget($, 'session ended')
+    return next(e)
+  })
+
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    await forget($, 'model switched')
+    return next(e)
+  }).catch((_$, e, next) => next(e))
+
+  // the /config rows: $.config.set does not run these, the menu does
+  on('config.set', { key: 'usage-quota.cacheTtl' }, async ($, e, next) => {
+    const answer = await next(e)
+    if (answer.deny === undefined && isTtlChoice(answer.value)) defaultChoice = answer.value
+    return answer
+  }).catch((_$, e, next) => next(e))
+  on('config.set', { key: 'usage-quota.idle5m' }, async ($, e, next) => {
+    const answer = await next({ ...e, value: limitOf(e.value) })
+    if (answer.deny === undefined) {
+      idleLimits = { ...idleLimits, '5m': limitOf(answer.value) }
+      await rescheduleWarm($)
+    }
+    return answer
+  }).catch((_$, e, next) => next(e))
+  on('config.set', { key: 'usage-quota.idle1h' }, async ($, e, next) => {
+    const answer = await next({ ...e, value: limitOf(e.value) })
+    if (answer.deny === undefined) {
+      idleLimits = { ...idleLimits, '1h': limitOf(answer.value) }
+      await rescheduleWarm($)
+    }
+    return answer
+  }).catch((_$, e, next) => next(e))
+  on('config.set', { key: 'usage-quota.warmUntil' }, async ($, e, next) => {
+    const answer = await next({ ...e, value: warmUntilOf(e.value) })
+    if (answer.deny === undefined) {
+      warmUntil = warmUntilOf(answer.value)
+      await rescheduleWarm($)
+    }
+    return answer
+  }).catch((_$, e, next) => next(e))
 
   on('command.run', { command: 'quota' }, async $ => {
     const now = !(await read($, isOn))

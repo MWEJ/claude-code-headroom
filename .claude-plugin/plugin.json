@@ -7,5 +7,38 @@
   "repository": "https://github.com/anantraghunath/claude-code-usage-quota-mod",
   "license": "MIT",
   "keywords": ["usage", "quota", "rate limits", "context window", "compact", "mod"],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "cacheTtl": {
+      "type": "string",
+      "title": "Keep cache warm: lifetime",
+      "description": "The prompt cache lifetime a new chat's Keep cache warm starts with. auto follows Claude Code's own choice (1h on a subscription within its limits, 5m on an API key or in overage); 5m or 1h sets it while warming is on. A 1h write costs 2x input instead of 1.25x.",
+      "default": "auto",
+      "options": ["auto", "5m", "1h"]
+    },
+    "idle5m": {
+      "type": "number",
+      "title": "Keep cache warm: idle refreshes, 5m",
+      "description": "Refreshes a 5-minute cache gets while the session is idle, 0 to 20; each still needs a $0.05 expected saving.",
+      "default": 5,
+      "min": 0,
+      "max": 20
+    },
+    "idle1h": {
+      "type": "number",
+      "title": "Keep cache warm: idle refreshes, 1h",
+      "description": "Refreshes a 1-hour cache gets while the session is idle, 0 to 20; each still needs a $0.05 expected saving.",
+      "default": 5,
+      "min": 0,
+      "max": 20
+    },
+    "warmUntil": {
+      "type": "number",
+      "title": "Keep cache warm: until a limit reaches %",
+      "description": "No refresh is sent while the 5 Hour or Weekly limit is at or past this %: a refresh counts against your plan like any request.",
+      "default": 85,
+      "min": 1,
+      "max": 100
+    }
+  }
 }

@@ -78,6 +78,8 @@ export type WarmStatus =
 export type WarmRate = Record<string, { jump: number; usd: number }>
 /** Keep cache warm, the session's side: the chain, the lifetime in force, the totals, the learned rate */
 export type Warm = {
+  /** the chat the chain and the totals belong to: another chat starts them afresh */
+  chat: string | null
   anchor: WarmAnchor | null
   status: WarmStatus
   isRunning: boolean
