@@ -869,8 +869,12 @@ let envBefore: string | undefined
 // the live window's last response as refresh() last read it, and when: what anchors stand on
 let lastApi: ModelUsage | null = null
 let lastApiAt = -Infinity
-// the response the anchor stands on: the same counts read again are no new response
+// the response the anchor stands on, and when it was seen: the same counts read again
+// are no new response
 let anchoredApi = ''
+let anchoredAt = -Infinity
+// when the running (or last) main turn started
+let turnStartedAt = -Infinity
 // what refreshes spent since the last main turn ended: the meter's next jump holds it too
 let spentSince = 0
 
@@ -1156,15 +1160,17 @@ async function judgeChain($: EngineInterface, previous: WarmAnchor | null, at: n
 
 // A response of the main conversation was seen (the live window's counts moved): the
 // chain before it is judged, and a new one starts from it. `model`: the turn's at its
-// end; mid-turn the anchor's own (a fork's response is not the live window's)
-async function anchorOn($: EngineInterface, api: ModelUsage, at: number, model: string | undefined): Promise<boolean> {
+// end; mid-turn the anchor's own (a fork's response is not the live window's). A turn
+// that ended with usage had a response even if its counts read the same as the last
+async function anchorOn($: EngineInterface, api: ModelUsage, at: number, model: string | undefined, isNew = false): Promise<boolean> {
   const key = JSON.stringify(api)
   const promptTokens = api.input_tokens + api.cache_read_input_tokens + api.cache_creation_input_tokens
-  if (key === anchoredApi || promptTokens <= 0) return false
+  if ((key === anchoredApi && !isNew) || promptTokens <= 0) return false
   const previous = (await read($, warm)).anchor
   const named = model ?? previous?.model
   if (named === undefined) return false
   anchoredApi = key
+  anchoredAt = at
   await judgeChain($, previous, at, api.cache_read_input_tokens)
   const { ttl } = await read($, warm)
   await update($, warm, s => ({
@@ -1228,7 +1234,8 @@ async function warmTurnEnd($: EngineInterface, usage: TurnUsage | undefined, end
   }
   const api = lastApiAt >= endedAt ? lastApi : await apiNow($)
   if (api) {
-    await anchorOn($, api, endedAt, usage?.model)
+    // anchored again only if no read of this turn's last response did it mid-turn
+    await anchorOn($, api, endedAt, usage?.model, usage !== undefined && anchoredAt < turnStartedAt)
     // a mid-turn anchor took the last model and lifetime: the turn names them
     const { anchor, ttl } = await read($, warm)
     if (usage && anchor && !anchor.isStopped && (anchor.model !== usage.model || anchor.ttl !== ttl)) {
@@ -1728,6 +1735,7 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     isBusy = true
     prompts += 1
+    turnStartedAt = await $.clock.now()
     await update($, warm, s => ({ ...s, isRunning: true }))
     // told at the end of the last turn: this turn is the agent's chance to hold
     if ((await read($, agentTimed)).told === 'next') await update($, agentTimed, s => ({ ...s, told: 'yes' as const }))
@@ -1859,14 +1867,30 @@ export const register: Register = (on, options) => {
     const agent = await read($, agentTimed)
     const startTickNow = await read($, startTick)
     const drawnStart = (await read($, startText)) ?? `${startOf(auto)}`
+    const warmSet = await read($, warmSetting)
+    const warmNow = await read($, warm)
+    // Keep cache warm's line above the bars: its status while on, else what the next
+    // message costs once the cache has gone (cache-policy's cacheLineOf)
+    const cacheLine = cacheLineOf({
+      isOn: warmSet.isOn,
+      anchor: warmNow.anchor,
+      status: warmNow.status,
+      totals: warmNow.totals,
+      assumed: warmNow.assumed,
+      rate: warmNow.rate,
+      limits: snap.limits,
+      outputTokens: warmNow.outputTokens,
+      now,
+    })
     // Laid out to the width the chat gives the band, down to the desktop's narrowest
     // chat: what fits side by side stays side by side; past that it stacks, and text
     // wraps rather than cuts off.
     // The header: the headline beside the controls when both fit, else the controls
     // on a row of their own beneath it
     // (the desktop's letters are narrower than its cells: about 0.8 of one)
-    // (the Agent-timed switch and its name add 14 cells, its "from" and field 10 more)
-    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0)
+    // (the Agent-timed switch and its name add 14 cells, its "from" and field 10 more;
+    // Keep cache warm's switch and name 18, its lifetime button 5)
+    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0) + 18 + (warmSet.isOn ? 5 : 0)
     // the terminal draws its own hide control ([-]) over the band's top-right
     // corner: the first row keeps clear of it
     const HOST_HIDE = Svg ? 0 : 4
@@ -1950,6 +1974,11 @@ export const register: Register = (on, options) => {
         {auto.isOn ? switchOf('timed', 'Agent-timed', timed, () => void setTimed($, !timed)) : null}
         {auto.isOn ? <Text color={timed ? undefined : MUTED}>{timed ? 'Agent-timed from' : 'Agent-timed'}</Text> : null}
         {timed ? fieldOf('startAt', `startAt${startTickNow}`, drawnStart) : null}
+        {/* Keep cache warm, on its own (Auto compact's state has no say): its switch,
+            and while on, the lifetime it keeps the cache for, pressed round */}
+        {switchOf('warm', 'Keep cache warm', warmSet.isOn, () => void setWarm($, !warmSet.isOn))}
+        <Text color={warmSet.isOn ? undefined : MUTED}>Keep cache warm</Text>
+        {warmSet.isOn ? <Button key="warmTtl" label={warmSet.ttl} onPress={() => void cycleTtl($)} /> : null}
         {/* a wide gap, so the fields read as the switches', not Compact's */}
         <Box key="compactBox" marginLeft={isHeadBeside ? 2 : 0}>
           <Button key="compact" label="Compact" hover={{ backgroundColor: COMPACT_LIT }} onPress={() => compactNow($)} />
@@ -2232,6 +2261,11 @@ export const register: Register = (on, options) => {
         {timed && agent.isAsked ? (
           <Box marginBottom={gap}>
             <Text color={MUTED}>Compacting when this turn ends</Text>
+          </Box>
+        ) : null}
+        {cacheLine ? (
+          <Box marginBottom={gap}>
+            <Text color={cacheLine.tone === 'amber' ? AMBER : MUTED} wrap="wrap">{cacheLine.text}</Text>
           </Box>
         ) : null}
 

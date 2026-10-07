@@ -134,8 +134,8 @@ test('draws the band on track', async ($, on) => {
     }
     if (surface === 'desktop') {
       // thin Svg bars: the context bar and the two rate bars, no flexGrow segments
-      // (the auto compact switch is an Svg too: left out here)
-      const svgs = (await ui.findAll({ type: 'Svg' })).filter(svg => !/^Auto compact/.test(String(svg.props.alt)))
+      // (the auto compact and Keep cache warm switches are Svgs too: left out here)
+      const svgs = (await ui.findAll({ type: 'Svg' })).filter(svg => !/^(Auto compact|Keep cache warm)/.test(String(svg.props.alt)))
       // the two rate bars (left, each with a forecast tick), then the context bar (right)
       expect(svgs).toHaveLength(3)
       expect(svgs[0]?.props.alt).toMatch(/^5 Hour/)

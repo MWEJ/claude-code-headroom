@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import type { ElementQuery, Engine } from 'claude-code/testing'
 import type { ConfigRow, ModelForkResult, ModelUsage, On, SessionRateLimit } from 'claude-code'
 
 const NOW = Date.parse('2026-10-04T06:00:00Z')
@@ -61,6 +61,9 @@ function world(on: On, w: World = {}) {
     logs: [] as string[],
     api: null as ModelUsage | null,
     limits: w.limits ?? ([] as SessionRateLimit[]),
+    registered: [] as string[],
+    // while set, a fork waits for it: the band can be seen mid-refresh
+    gate: null as Promise<void> | null,
   }
   on('session.usage', () => ({
     value: {
@@ -74,9 +77,14 @@ function world(on: On, w: World = {}) {
       rateLimits: seen.limits,
     },
   }))
-  on('model.fork', (_$, e) => {
+  on('model.fork', async (_$, e) => {
     seen.forks.push(e.prompt)
+    if (seen.gate) await seen.gate
     return { value: seen.replies.shift() ?? WARMED }
+  })
+  on('tool.register', (_$, e) => {
+    seen.registered.push(e.name)
+    return { value: { tool: `mcp__usage-quota__${e.name}` } }
   })
   on('env.set', (_$, e) => {
     seen.envSets.push([e.name, e.value])
@@ -326,4 +334,128 @@ test('the totals: this session and all time, refreshes and what they cost', asyn
   const allTime = stored.get('warmAllTime') as { refreshes: number; costUsd: number }
   expect(allTime.refreshes).toBe(2)
   expect(Math.abs(allTime.costUsd - 2 * 0.043852)).toBeLessThan(1e-9)
+})
+
+// the band, on both surfaces it draws on
+const SURFACES = ['terminal', 'desktop'] as const
+const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 120, scroll: { offset: 0, bodyRows: 20 }, view: {} }
+// the kit matches any prop (a Button's label, an Svg's alt); its query type names only a few
+const by = (query: ElementQuery & { label?: string; alt?: string }): ElementQuery => query
+type Ui = { find: (q: ElementQuery) => Promise<{ text?: string; props: Record<string, unknown> } | undefined> }
+const ttlLabel = async (ui: Ui) => (await ui.find({ key: 'warmTtl' }))?.props.label
+const cacheText = async (ui: Ui) => (await ui.find({ type: 'Text', text: /^(Cache |Refreshing|Warming )/ }))?.text
+
+for (const surface of SURFACES) {
+  test(`the band (${surface}): the switch turns warming on for this chat and registers nothing; the lifetime goes auto, 5m, 1h, auto`, async ($, on) => {
+    const { seen, stored } = world(on, { saved: null })
+    await $.session.start(START)
+    const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    expect((await ui.find({ type: 'Text', text: 'Keep cache warm' }))?.props.color).toBe('#8b90a0')
+    expect(await ui.find({ key: 'warmTtl' })).toBeUndefined()
+    if (surface === 'desktop') expect(await ui.find(by({ type: 'Svg', alt: 'Keep cache warm off' }))).toBeDefined()
+    else expect(await ui.find(by({ type: 'Button', label: '○' }))).toBeDefined()
+
+    await ui.press({ key: 'warm' })
+    expect(stored.get('warm:chat')).toEqual({ isOn: true, ttl: 'auto' })
+    expect(seen.registered).toEqual([])
+    expect(seen.envSets).toEqual([])
+    expect((await ui.find({ type: 'Text', text: 'Keep cache warm' }))?.props.color).toBeUndefined()
+    if (surface === 'desktop') expect(await ui.find(by({ type: 'Svg', alt: 'Keep cache warm on' }))).toBeDefined()
+    expect(await ttlLabel(ui)).toBe('auto')
+
+    // a chosen lifetime is set in the variable while no response has written the cache
+    for (const [label, set] of [['5m', '5m'], ['1h', '1h'], ['auto', undefined]] as const) {
+      await ui.press({ key: 'warmTtl' })
+      expect(await ttlLabel(ui)).toBe(label)
+      expect(seen.envSets.at(-1)).toEqual(['CLAUDE_CODE_PROMPT_CACHE_TTL', set])
+    }
+    expect(stored.get('warm:chat')).toEqual({ isOn: true, ttl: 'auto' })
+
+    await ui.press({ key: 'warm' })
+    expect(await ui.find({ key: 'warmTtl' })).toBeUndefined()
+    expect(stored.get('warm:chat')).toEqual({ isOn: false, ttl: 'auto' })
+    await ui.unmount()
+  })
+}
+
+test('the band: after the first response the lifetime holds for the session; a press says so, and a /clear frees it', async ($, on) => {
+  const { clock, seen } = world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await prompt($, clock, seen)
+  await ui.press({ key: 'warmTtl' })
+  expect(await ttlLabel(ui)).toBe('5m')
+  expect(seen.envSets).toEqual([])
+  expect(seen.toasts).toContain("Cache lifetime 5m applies to new sessions: this one's cache is written at 5m")
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } } as never)
+  await ui.press({ key: 'warmTtl' })
+  expect(seen.envSets).toEqual([['CLAUDE_CODE_PROMPT_CACHE_TTL', '1h']])
+  await ui.unmount()
+})
+
+test("the band: the warmer's status, scheduled, refreshing, with its totals and what kept prompts saved", async ($, on) => {
+  const { clock, seen } = world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await cacheText(ui)).toBeUndefined()
+  await prompt($, clock, seen)
+  expect(await cacheText(ui)).toBe('Cache warm · refresh in 4m')
+
+  let open = () => {}
+  seen.gate = new Promise<void>(resolve => {
+    open = resolve
+  })
+  await clock.advance(270_000)
+  expect(seen.forks).toHaveLength(1)
+  const refreshing = await ui.find({ type: 'Text', text: 'Refreshing the cache…' })
+  expect(refreshing?.props.color).toBe('#fbbf24')
+  seen.gate = null
+  open()
+  await clock.advance(3_000)
+  expect(await cacheText(ui)).toBe('Cache warm · refresh in 4m · 1 refresh this session, $0.04')
+
+  // a prompt past the lifetime that read the warm cache: kept, a 5m rewrite of 199.5k avoided
+  await clock.advance(60_000)
+  await prompt($, clock, seen, { ...API, cache_read_input_tokens: 199_500 })
+  expect(await cacheText(ui)).toBe('Cache warm · refresh in 4m · 1 refresh this session, $0.04, saved $0.96')
+  await ui.unmount()
+})
+
+test('the band: a failed refresh shows warming stopped, and why', async ($, on) => {
+  const { clock, seen } = world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  seen.replies.push({ isAnswered: false, reason: 'api-error', status: 429, error: 'rate_limit', usage: ZERO })
+  await prompt($, clock, seen)
+  await clock.advance(270_000)
+  expect((await ui.find({ type: 'Text', text: 'Warming stopped: refresh failed (rate_limit 429)' }))?.props.color).toBe('#8b90a0')
+  await ui.unmount()
+})
+
+test("the band: with warming off it warns before and after the cache expires, in the 5 Hour limit's % once a rate is learned", async ($, on) => {
+  // a subscription held to 5m, so the lifetime passes quickly
+  const { clock, seen } = world(on, { saved: null, limits: plan(10), env: { FORCE_PROMPT_CACHING_5M: '1' } })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  await prompt($, clock, seen)
+  // no rate yet: the dollars (the band redraws its ages each minute)
+  await clock.advance(7 * MIN)
+  expect(await cacheText(ui)).toBe(
+    'Cache expired 1m ago: your next message rewrites 200.0k tokens, about $0.96 (warm: $0.04) · Keep cache warm would have kept it for about $0.04',
+  )
+  // the second turn moved 5 Hour by a point for (1,000 * 5 + 199,000 * 0.2 + 300 * 20) / 1e6 = $0.0508
+  seen.limits = plan(11)
+  await prompt($, clock, seen)
+  expect(await cacheText(ui)).toBeUndefined()
+  await clock.advance(4 * MIN)
+  const expiring = await ui.find({ type: 'Text', text: /^Cache expires/ })
+  expect(expiring?.text).toBe('Cache expires in 1m: the next message after that rewrites 200.0k tokens, about 18.9% of 5 Hour · Keep cache warm would keep it for about 0.9%')
+  expect(expiring?.props.color).toBe('#8b90a0')
+  await clock.advance(6 * MIN)
+  const expired = await ui.find({ type: 'Text', text: /^Cache expired/ })
+  expect(expired?.text).toBe(
+    'Cache expired 4m ago: your next message rewrites 200.0k tokens, about 18.9% of 5 Hour (warm: 0.8%) · Keep cache warm would have kept it for about 0.9%',
+  )
+  expect(expired?.props.color).toBe('#fbbf24')
+  await ui.unmount()
 })
