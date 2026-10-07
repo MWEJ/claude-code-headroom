@@ -95,3 +95,54 @@ session and a read of the log.
 
 On the branch before the feature: `claude plugin test .` 69 pass, 0 fail; `claude plugin
 validate .` passes; `tsc` exits 0.
+
+## The finished mod
+
+What the test kit and a headless run proved on the finished branch (Claude Code 2.1.291, the
+same cloud session), checked by the main session after one Opus subagent built it:
+
+- `claude plugin test .`: **109 pass, 0 fail** across five files (40 new tests in
+  `tests/cache-policy.test.ts` and `tests/cache-warm.test.tsx`). The suite takes about 20
+  seconds now: the engine tests advance the clock through the mod's timers.
+- `claude plugin validate .` passes; every gating hook, the four `config.set` rows and
+  `classic.PostModelSwitch` included, is listed with `.catch`.
+- `tsc --noEmit` exits 0.
+- `claude -p "Run the bash command: echo hi. Then reply with the single word done." --plugin-dir .
+  --allowedTools Bash --debug`: the debug log shows `cache anchor: 34.6k tokens on
+  claude-sonnet-5-5 at 1h` (the automatic lifetime, inferred from the subscription's limits) and
+  `cache rate: nothing measured (no earlier reading of the same window)` for a first turn.
+- Four deliberate breaks of the engine, each caught by exactly the tests meant for it: the
+  `warmUntil` stop dropped (2 tests), an expired 1h cache no longer assuming 5m (1), the cache
+  line not drawn (3), a `/clear` no longer forgetting the chain (1).
+- The invisible characters of `hooks/register.tsx` are intact.
+
+Left out of this build, on purpose, from the spec's proposals: a press on the status line to
+show the all-time totals (they are kept in the store and the state, not shown), and the
+"compact or warm" toast of §4.3.
+
+## The maintainer's interactive checklist
+
+Items 4 and 6 of §6, and the feature live. In a terminal from the repo, on the subscription:
+
+```text
+claude --debug --plugin-dir .
+1. Send a prompt. The band shows nothing new yet (warming is off). Then wait past an hour
+   without a prompt: an amber line "Cache expired Nm ago: your next message rewrites …k tokens,
+   about $… (warm: $…) · Keep cache warm would have kept it for about $…". Two minutes before,
+   the muted "Cache expires in 2m" line.
+   -> Item 4 (the automatic 1h) passes if the "expires" line comes about 58 minutes after the
+      prompt, not 3 minutes after; and if a prompt sent at 50 minutes still reads the cache
+      (the reply is quick and the debug log's next "cache anchor" shows the same size).
+2. Switch Keep cache warm on (a toast says each refresh counts against the plan). Press the
+   lifetime button once: "5m". Send a prompt. The band: "Cache warm · refresh in 4m".
+   -> 4m30s later a ☕ row in the transcript, "Cache warmed · read …k · $… · saves $… vs
+      rewrite", and the line "Cache warm · refresh in 4m · 1 refresh this session, $…".
+   -> After 5 refreshes (the idle limit) the line says "Warming stopped: all 5 idle refreshes
+      used, cache expires at H:MM", and a ☕ row says the same.
+3. Send ten prompts of varied size, a few minutes apart. In the debug log
+   (~/.claude/debug/<session>.txt), the lines "usage-quota: cache rate: five_hour +X% for $Y".
+   -> Item 6 passes if X against Y fits a line through the origin within 20%. From then the
+      band's warning reads in "% of 5 Hour" instead of dollars.
+4. /clear, then a prompt: the line "Warming stopped: conversation cleared" went with the clear,
+   and the new chain anchors on the prompt's reply.
+```
