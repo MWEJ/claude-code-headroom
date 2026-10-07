@@ -98,7 +98,7 @@ test('the transcript notice of each outcome', () => {
   )
   expect(idleStopNotice('1h', 5, Date.parse('2026-10-04T06:00:00Z'))).toMatch(/^☕ 1h · Warming stopped · all 5 idle refreshes used · cache expires at \d+:\d\d [AP]M$/)
   expect(FORK_PROMPT).toBe(
-    '[usage-quota] Automated prompt cache refresh by the usage-quota plugin, not a message from the user. Reply with the single word ok.',
+    '[headroom] Automated prompt cache refresh by the headroom plugin, not a message from the user. Reply with the single word ok.',
   )
 })
 

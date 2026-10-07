@@ -101,7 +101,7 @@ export type WarmSetting = { isOn: boolean; ttl: TtlChoice }
 
 declare module 'claude-code' {
   interface PluginState {
-    'usage-quota': {
+    'headroom': {
       snapshot: Snapshot | null
       isOn: boolean
       isCollapsed: boolean

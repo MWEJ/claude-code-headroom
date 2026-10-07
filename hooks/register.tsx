@@ -15,20 +15,20 @@ import {
 } from './cache-policy'
 import type { ForkReply, Refresh } from './cache-policy'
 
-const snapshot = atom({ plugin: 'usage-quota', key: 'snapshot' } as const, null)
-const isOn = atom({ plugin: 'usage-quota', key: 'isOn' } as const, true)
-const isCollapsed = atom({ plugin: 'usage-quota', key: 'isCollapsed' } as const, false)
-const autoCompact = atom({ plugin: 'usage-quota', key: 'autoCompact' } as const, DEFAULT_AUTO)
+const snapshot = atom({ plugin: 'headroom', key: 'snapshot' } as const, null)
+const isOn = atom({ plugin: 'headroom', key: 'isOn' } as const, true)
+const isCollapsed = atom({ plugin: 'headroom', key: 'isCollapsed' } as const, false)
+const autoCompact = atom({ plugin: 'headroom', key: 'autoCompact' } as const, DEFAULT_AUTO)
 // what Agent-timed holds for the session: the agent's hold, note and request, and what it has been told
-const agentTimed = atom({ plugin: 'usage-quota', key: 'agentTimed' } as const, EMPTY as AgentTimed)
-const fieldTick = atom({ plugin: 'usage-quota', key: 'fieldTick' } as const, 0)
+const agentTimed = atom({ plugin: 'headroom', key: 'agentTimed' } as const, EMPTY as AgentTimed)
+const fieldTick = atom({ plugin: 'headroom', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
-const fieldText = atom({ plugin: 'usage-quota', key: 'fieldText' } as const, null as string | null)
+const fieldText = atom({ plugin: 'headroom', key: 'fieldText' } as const, null as string | null)
 // the start % field's own tick and typed text, as fieldTick and fieldText are the cap's
-const startTick = atom({ plugin: 'usage-quota', key: 'startTick' } as const, 0)
-const startText = atom({ plugin: 'usage-quota', key: 'startText' } as const, null as string | null)
-const theme = atom({ plugin: 'usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
-const autoAsk = atom({ plugin: 'usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+const startTick = atom({ plugin: 'headroom', key: 'startTick' } as const, 0)
+const startText = atom({ plugin: 'headroom', key: 'startText' } as const, null as string | null)
+const theme = atom({ plugin: 'headroom', key: 'theme' } as const, 'dark' as 'dark' | 'light')
+const autoAsk = atom({ plugin: 'headroom', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
 // Keep cache warm: the session's chain, lifetime, totals and rate; and this chat's switch
 const WARM_EMPTY: Warm = {
   chat: null,
@@ -44,8 +44,8 @@ const WARM_EMPTY: Warm = {
   rate: {},
   lastLimits: null,
 }
-const warm = atom({ plugin: 'usage-quota', key: 'warm' } as const, WARM_EMPTY)
-const warmSetting = atom({ plugin: 'usage-quota', key: 'warmSetting' } as const, { isOn: true, ttl: 'auto' } as WarmSetting)
+const warm = atom({ plugin: 'headroom', key: 'warm' } as const, WARM_EMPTY)
+const warmSetting = atom({ plugin: 'headroom', key: 'warmSetting' } as const, { isOn: true, ttl: 'auto' } as WarmSetting)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -574,7 +574,7 @@ async function calibrate($: EngineInterface): Promise<void> {
     await $.store.set('calib', next)
     lastSnapshot = ''
   } catch (error) {
-    $.ui.log(`usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    $.ui.log(`headroom: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
   } finally {
     isCalibrating = false
   }
@@ -621,7 +621,7 @@ async function tell($: EngineInterface, text: string): Promise<void> {
   } catch (error) {
     outcome = `not appended: ${reasonOf(error)}`
   }
-  $.ui.log(`usage-quota: agent-timed row (${outcome}): ${text}`, { to: 'debug' })
+  $.ui.log(`headroom: agent-timed row (${outcome}): ${text}`, { to: 'debug' })
 }
 
 // The main agent is waiting on work whose results it must still take in. An agent list
@@ -643,7 +643,7 @@ async function ensureTool($: EngineInterface): Promise<boolean> {
     await $.tool.register({ name: TOOL_NAME, description: TOOL_DESCRIPTION, inputSchema: TOOL_SCHEMA })
     isToolRegistered = true
   } catch (error) {
-    $.ui.log(`usage-quota: the compaction tool could not be registered: ${reasonOf(error)}`, { to: 'debug' })
+    $.ui.log(`headroom: the compaction tool could not be registered: ${reasonOf(error)}`, { to: 'debug' })
   }
   return isToolRegistered
 }
@@ -773,7 +773,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
       if (attempt < AUTO_TRIES) return autoCompactNow($, attempt + 1)
       isCompacting = false
       $.ui.toast(`Auto compact could not start: ${reason}`)
-      $.ui.log(`usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
+      $.ui.log(`headroom: auto compact failed: ${reason}`, { to: 'debug' })
     }
   })
 }
@@ -941,7 +941,7 @@ async function applyTtl($: EngineInterface, isPressed: boolean): Promise<void> {
     await $.env.set('CLAUDE_CODE_PROMPT_CACHE_TTL', want ?? envBefore)
     envSet = want
   } catch (error) {
-    $.ui.log(`usage-quota: the cache lifetime could not be set: ${reasonOf(error)}`, { to: 'debug' })
+    $.ui.log(`headroom: the cache lifetime could not be set: ${reasonOf(error)}`, { to: 'debug' })
   }
 }
 
@@ -955,7 +955,7 @@ async function cacheRow($: EngineInterface, text: string): Promise<void> {
   } catch (error) {
     outcome = `not appended: ${reasonOf(error)}`
   }
-  $.ui.log(`usage-quota: cache row (${outcome}): ${text}`, { to: 'debug' })
+  $.ui.log(`headroom: cache row (${outcome}): ${text}`, { to: 'debug' })
 }
 
 // this session's totals and the all-time ones in the store take the same delta
@@ -969,7 +969,7 @@ async function addToTotals($: EngineInterface, delta: Partial<WarmTotals>): Prom
 
 async function reportStop($: EngineInterface, reason: string, isPaused = false): Promise<void> {
   await update($, warm, s => ({ ...s, status: isPaused ? { state: 'stopped' as const, reason, isPaused } : { state: 'stopped' as const, reason } }))
-  $.ui.log(`usage-quota: cache warming stopped: ${reason}`, { to: 'debug' })
+  $.ui.log(`headroom: cache warming stopped: ${reason}`, { to: 'debug' })
 }
 
 // Compaction, /clear, a session's end and a model switch forget the chain: only the
@@ -1043,7 +1043,7 @@ async function schedule($: EngineInterface): Promise<void> {
   warmTimer?.cancel()
   warmTimer = $.clock.after(Math.max(0, nextAt - now), () => void refreshCache($))
   await update($, warm, s => ({ ...s, status: { state: 'scheduled' as const, nextAt, phase, expectedUsd: decision.expectedUsd } }))
-  $.ui.log(`usage-quota: cache refresh in ${formatDuration(nextAt - now)} (${current.ttl}, ${phase}, expected saving ${formatUsd(decision.expectedUsd)})`, { to: 'debug' })
+  $.ui.log(`headroom: cache refresh in ${formatDuration(nextAt - now)} (${current.ttl}, ${phase}, expected saving ${formatUsd(decision.expectedUsd)})`, { to: 'debug' })
 }
 
 // the timer's refresh: it claims its anchor until chain() records it there
@@ -1186,7 +1186,7 @@ async function anchorOn($: EngineInterface, api: ModelUsage, at: number, model: 
     ...s,
     anchor: { at, lastAt: at, model: named, promptTokens, ttl, refreshes: 0, idleRefreshes: 0, feeUsd: 0, isStopped: false },
   }))
-  $.ui.log(`usage-quota: cache anchor: ${formatTokens(promptTokens)} tokens on ${named} at ${ttl}`, { to: 'debug' })
+  $.ui.log(`headroom: cache anchor: ${formatTokens(promptTokens)} tokens on ${named} at ${ttl}`, { to: 'debug' })
   return true
 }
 
@@ -1217,7 +1217,7 @@ async function learnRate($: EngineInterface, usage: TurnUsage, ttl: Ttl, limits:
   if (limits.length > 0) await update($, warm, s => ({ ...s, lastLimits: limits }))
   const jumps = jumpsOf(before, limits)
   if (turnUsd === null || Object.keys(jumps).length === 0) {
-    $.ui.log(`usage-quota: cache rate: nothing measured (${turnUsd === null ? `no price for ${usage.model}` : 'no earlier reading of the same window'})`, { to: 'debug' })
+    $.ui.log(`headroom: cache rate: nothing measured (${turnUsd === null ? `no price for ${usage.model}` : 'no earlier reading of the same window'})`, { to: 'debug' })
     return
   }
   const rate = addRate((await storeGet<WarmRate>($, 'warmRate')) ?? (await read($, warm)).rate, jumps, usd)
@@ -1225,7 +1225,7 @@ async function learnRate($: EngineInterface, usage: TurnUsage, ttl: Ttl, limits:
   await storeSet($, 'warmRate', rate)
   const moved = Object.entries(jumps).map(([kind, jump]) => `${kind} +${jump.toFixed(1)}%`).join(', ')
   const sums = Object.entries(rate).map(([kind, r]) => `${kind} ${r.jump.toFixed(1)}% / ${formatUsd(r.usd)}`).join(', ')
-  $.ui.log(`usage-quota: cache rate: ${moved} for ${formatUsd(usd)} (${usage.model}); sums ${sums}`, { to: 'debug' })
+  $.ui.log(`headroom: cache rate: ${moved} for ${formatUsd(usd)} (${usage.model}); sums ${sums}`, { to: 'debug' })
 }
 
 // A main turn ended: the first one locks the lifetime, the lifetime in force is
@@ -1249,7 +1249,7 @@ async function warmTurnEnd($: EngineInterface, usage: TurnUsage | undefined, end
     const { anchor, ttl } = await read($, warm)
     if (usage && anchor && !anchor.isStopped && (anchor.model !== usage.model || anchor.ttl !== ttl)) {
       await update($, warm, s => (s.anchor ? { ...s, anchor: { ...s.anchor, model: usage.model, ttl } } : s))
-      $.ui.log(`usage-quota: cache anchor: ${formatTokens(anchor.promptTokens)} tokens on ${usage.model} at ${ttl}`, { to: 'debug' })
+      $.ui.log(`headroom: cache anchor: ${formatTokens(anchor.promptTokens)} tokens on ${usage.model} at ${ttl}`, { to: 'debug' })
     }
   }
   await schedule($)
@@ -1550,7 +1550,7 @@ async function syncTheme($: EngineInterface): Promise<void> {
       themeFile = { mtimeMs, mode }
     }
   } catch (error) {
-    if (!didLogTheme) $.ui.log(`usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    if (!didLogTheme) $.ui.log(`headroom: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
     didLogTheme = true
     return
   }
@@ -1640,7 +1640,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     hadError = false
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    $.ui.status(`usage-quota: ${message.replace(/^usage-quota: /, '')}`)
+    $.ui.status(`headroom: ${message.replace(/^headroom: /, '')}`)
     hadError = true
   } finally {
     isRefreshing = false
@@ -1659,9 +1659,9 @@ export const register: Register = (on, options) => {
   warmUntil = warmUntilOf(options.warmUntil)
 
   // the mod's own tool: no permission prompt stands between the agent and a hold
-  on('tool.check', { tool: /^mcp__usage-quota__compaction$/ }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
+  on('tool.check', { tool: /^mcp__headroom__compaction$/ }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
 
-  on('tool.call', { tool: /^mcp__usage-quota__compaction$/ }, async ($, e) => {
+  on('tool.call', { tool: /^mcp__headroom__compaction$/ }, async ($, e) => {
     const input = e as unknown as ToolInput & { agentId?: string }
     const auto = await read($, autoCompact)
     const before = await read($, agentTimed)
@@ -1698,7 +1698,7 @@ export const register: Register = (on, options) => {
     return done
   }).catch((_$, e, next) => next(e))
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'quota', description: 'Toggle the Claude Code Usage Quota band above the prompt' })
+    await $.command.register({ name: 'headroom', description: 'Toggle the Headroom band above the prompt' })
     const result = await next(e)
     try {
       calib = ((await $.store.get('calib')) as typeof calib | undefined) ?? {}
@@ -1801,12 +1801,12 @@ export const register: Register = (on, options) => {
   }).catch((_$, e, next) => next(e))
 
   // the /config rows: $.config.set does not run these, the menu does
-  on('config.set', { key: 'usage-quota.cacheTtl' }, async ($, e, next) => {
+  on('config.set', { key: 'headroom.cacheTtl' }, async ($, e, next) => {
     const answer = await next(e)
     if (answer.deny === undefined && isTtlChoice(answer.value)) defaultChoice = answer.value
     return answer
   }).catch((_$, e, next) => next(e))
-  on('config.set', { key: 'usage-quota.idle5m' }, async ($, e, next) => {
+  on('config.set', { key: 'headroom.idle5m' }, async ($, e, next) => {
     const answer = await next({ ...e, value: limitOf(e.value) })
     if (answer.deny === undefined) {
       idleLimits = { ...idleLimits, '5m': limitOf(answer.value) }
@@ -1814,7 +1814,7 @@ export const register: Register = (on, options) => {
     }
     return answer
   }).catch((_$, e, next) => next(e))
-  on('config.set', { key: 'usage-quota.idle1h' }, async ($, e, next) => {
+  on('config.set', { key: 'headroom.idle1h' }, async ($, e, next) => {
     const answer = await next({ ...e, value: limitOf(e.value) })
     if (answer.deny === undefined) {
       idleLimits = { ...idleLimits, '1h': limitOf(answer.value) }
@@ -1822,7 +1822,7 @@ export const register: Register = (on, options) => {
     }
     return answer
   }).catch((_$, e, next) => next(e))
-  on('config.set', { key: 'usage-quota.warmUntil' }, async ($, e, next) => {
+  on('config.set', { key: 'headroom.warmUntil' }, async ($, e, next) => {
     const answer = await next({ ...e, value: warmUntilOf(e.value) })
     if (answer.deny === undefined) {
       warmUntil = warmUntilOf(answer.value)
@@ -1831,11 +1831,11 @@ export const register: Register = (on, options) => {
     return answer
   }).catch((_$, e, next) => next(e))
 
-  on('command.run', { command: 'quota' }, async $ => {
+  on('command.run', { command: 'headroom' }, async $ => {
     const now = !(await read($, isOn))
     await update($, isOn, () => now)
     if (now) await refresh($, 'now')
-    return { text: now ? 'Claude Code Usage Quota on.' : 'Claude Code Usage Quota off.' }
+    return { text: now ? 'Headroom on.' : 'Headroom off.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

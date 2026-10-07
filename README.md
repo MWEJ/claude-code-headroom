@@ -1,12 +1,14 @@
-# Claude Code Usage Quota Mod with Auto Compact
+# Headroom: a Claude Code mod for your limits, context and cache
 
-[![Version: v0.1.3](docs/badges/version-v0.1.3.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 80% default](docs/badges/auto-compact-v3.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
+[![Version: v0.1.0](docs/badges/version-v0.1.0.svg)](https://github.com/MWEJ/claude-code-headroom/releases/latest) ![Auto compact: 80% default](docs/badges/auto-compact-v3.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
 
-**Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
+**Know how much room you have left, and make more of it.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, let it compact automatically, or let Claude pick the moment. Keep the prompt cache warm so the first message after a break stays cheap.**
+
+*Formerly Claude Code Usage Quota Mod.*
 
 The 5 Hour and Weekly limits are **your whole Claude account's**, including what you use in Claude chat and Cowork. The band itself shows in **Claude Code**: the desktop app and the terminal.
 
-Type **`/quota`** to turn the band off and on.
+Type **`/headroom`** to turn the band off and on.
 
 ## Expanded
 
@@ -120,8 +122,8 @@ Every message sends the whole conversation. The API keeps it in a **prompt cache
 With **Keep cache warm** on, the mod sends one small request shortly before the cache would expire: a copy of the conversation's last request with one line asking for the word *ok*. It re-reads the cache, which keeps it alive, and never enters the conversation; a ☕ row in the transcript records each one with what it cost and saves.
 
 - **It sends only when it pays.** A refresh goes out only when it is expected to save at least **$0.05**: always worth it while Claude is working, and at a 15% chance of your next message while you are away. A small conversation is below that, and is not warmed.
-- **Two numbers bound it:** at most **5 refreshes** per lifetime while you are away (set 0 to 20, separately for 5m and 1h), and none while your 5 Hour or Weekly limit is at or past **85%**. Both are `/config` rows (`usage-quota.idle5m`, `usage-quota.idle1h`, `usage-quota.warmUntil`).
-- **The lifetime follows Claude Code.** The **Cache** dropdown in the band's top row reads **auto** by default: 1 hour on a Claude subscription within its limits, 5 minutes on an API key or once in overage, as Claude Code chooses (and as `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `ENABLE_PROMPT_CACHING_1H` or the `promptCacheTtl` setting say). Pick **5m** or **1h** to choose for this session, warming on or off. The first reply of a session writes the cache, so a choice made after it applies to new sessions. `usage-quota.cacheTtl` in `/config` sets what new chats start with.
+- **Two numbers bound it:** at most **5 refreshes** per lifetime while you are away (set 0 to 20, separately for 5m and 1h), and none while your 5 Hour or Weekly limit is at or past **85%**. Both are `/config` rows (`headroom.idle5m`, `headroom.idle1h`, `headroom.warmUntil`).
+- **The lifetime follows Claude Code.** The **Cache** dropdown in the band's top row reads **auto** by default: 1 hour on a Claude subscription within its limits, 5 minutes on an API key or once in overage, as Claude Code chooses (and as `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `ENABLE_PROMPT_CACHING_1H` or the `promptCacheTtl` setting say). Pick **5m** or **1h** to choose for this session, warming on or off. The first reply of a session writes the cache, so a choice made after it applies to new sessions. `headroom.cacheTtl` in `/config` sets what new chats start with.
 - The band says what it is doing: *Cache warm · refresh in 38m · 3 refreshes this session, $0.04, saved $0.31*, or why it stopped. Compacting, `/clear`, a model switch or a failed refresh start it afresh with your next message.
 
 > [!IMPORTANT]
@@ -155,13 +157,13 @@ Needs a recent Claude Code, signed in with a **Pro or Max** plan.
 **Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` command if asked, then **quit and reopen** the app:
 
 ```text
-Install the usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
+Install the headroom plugin from the GitHub marketplace MWEJ/claude-code-headroom
 ```
 
 **Terminal:** inside `claude`, run:
 
 ```text
-/plugin install usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
+/plugin install headroom --marketplace MWEJ/claude-code-headroom
 ```
 
 Either way installs it for **both** the desktop app and the terminal.
@@ -169,40 +171,40 @@ Either way installs it for **both** the desktop app and the terminal.
 **Update:** ask Claude, then restart:
 
 ```text
-Update the usage-quota plugin from its marketplace
+Update the headroom plugin from its marketplace
 ```
 
 **Uninstall:** in the desktop app, ask Claude:
 
 ```text
-Remove the claude-code-usage-quota-mod plugin marketplace
+Remove the claude-code-headroom plugin marketplace
 ```
 
 or in the terminal:
 
 ```text
-/plugin marketplace remove claude-code-usage-quota-mod
+/plugin marketplace remove claude-code-headroom
 ```
 
-then restart. This removes it from both. Just want it out of sight? **`/quota`** hides it without uninstalling.
+then restart. This removes it from both. Just want it out of sight? **`/headroom`** hides it without uninstalling.
 
 <details>
 <summary>From your own shell instead</summary>
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace add MWEJ/claude-code-headroom; claude plugin install headroom@claude-code-headroom
 ```
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-headroom; claude plugin update headroom@claude-code-headroom
 ```
 
 To uninstall:
 
 ```bash
-claude plugin marketplace remove claude-code-usage-quota-mod
+claude plugin marketplace remove claude-code-headroom
 ```
 
 </details>
@@ -213,16 +215,16 @@ claude plugin marketplace remove claude-code-usage-quota-mod
 
 ## Feedback and contributing
 
-First release: I'd love to hear how it works for you. [Open an issue](https://github.com/anantraghunath/claude-code-usage-quota-mod/issues) for bugs or ideas. Pull requests welcome.
+First release: I'd love to hear how it works for you. [Open an issue](https://github.com/MWEJ/claude-code-headroom/issues) for bugs or ideas. Pull requests welcome.
 
 To work on it, clone the repo, then load it from the folder, or run its tests:
 
 ```bash
-claude --plugin-dir ./claude-code-usage-quota-mod
+claude --plugin-dir ./claude-code-headroom
 ```
 
 ```bash
-claude plugin test ./claude-code-usage-quota-mod
+claude plugin test ./claude-code-headroom
 ```
 
 **If you find it useful, a ⭐ helps others find it.**

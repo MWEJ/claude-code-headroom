@@ -84,7 +84,7 @@ export const ZERO_TOTALS: WarmTotals = { refreshes: 0, costUsd: 0, wastedUsd: 0,
 // the one user message a refresh appends to the fork: it says what it is, so a
 // transcript reader (or the model) never takes it for the person
 export const FORK_PROMPT =
-  '[usage-quota] Automated prompt cache refresh by the usage-quota plugin, not a message from the user. Reply with the single word ok.'
+  '[headroom] Automated prompt cache refresh by the headroom plugin, not a message from the user. Reply with the single word ok.'
 
 const WINDOW_LABELS: Record<string, string> = { five_hour: '5 Hour', seven_day: 'Weekly' }
 

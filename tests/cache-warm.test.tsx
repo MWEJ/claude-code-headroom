@@ -9,7 +9,7 @@ const OPUS = 'claude-opus-5-5'
 const START = { cwd: '.', surface: 'desktop', isInteractive: true } as const
 const GO = { text: 'go', turnId: 't1' } as never
 const ON = { isOn: true, ttl: 'auto' }
-const FORK_PROMPT = '[usage-quota] Automated prompt cache refresh by the usage-quota plugin, not a message from the user. Reply with the single word ok.'
+const FORK_PROMPT = '[headroom] Automated prompt cache refresh by the headroom plugin, not a message from the user. Reply with the single word ok.'
 
 // the main conversation's last response: a 200k prompt, nearly all read from the cache
 const API: ModelUsage = { input_tokens: 0, output_tokens: 300, cache_read_input_tokens: 199_000, cache_creation_input_tokens: 1_000 }
@@ -84,7 +84,7 @@ function world(on: On, w: World = {}) {
   })
   on('tool.register', (_$, e) => {
     seen.registered.push(e.name)
-    return { value: { tool: `mcp__usage-quota__${e.name}` } }
+    return { value: { tool: `mcp__headroom__${e.name}` } }
   })
   on('env.set', (_$, e) => {
     seen.envSets.push([e.name, e.value])
@@ -98,7 +98,7 @@ function world(on: On, w: World = {}) {
   on('session.authorize', () => ({ value: null }))
   on('session.measure', () => ({ changed: [] }))
   on('session.compact', () => ({ messages: [{ role: 'user', text: 'summary', toolUses: [] }] }) as never)
-  on('command.register', () => ({ value: { command: 'quota' } }))
+  on('command.register', () => ({ value: { command: 'headroom' } }))
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)
     return { value: undefined }
@@ -118,15 +118,15 @@ type Clock = { advance: (ms: number) => Promise<void> }
 
 // the notice rows the mod appended, as the debug log has them
 const rows = (seen: { logs: string[] }) =>
-  seen.logs.filter(l => l.startsWith('usage-quota: cache row')).map(l => l.replace(/^usage-quota: cache row \([^)]*\): /, ''))
+  seen.logs.filter(l => l.startsWith('headroom: cache row')).map(l => l.replace(/^headroom: cache row \([^)]*\): /, ''))
 const stops = (seen: { logs: string[] }) =>
-  seen.logs.filter(l => l.startsWith('usage-quota: cache warming stopped: ')).map(l => l.replace('usage-quota: cache warming stopped: ', ''))
+  seen.logs.filter(l => l.startsWith('headroom: cache warming stopped: ')).map(l => l.replace('headroom: cache warming stopped: ', ''))
 
 // where each chain stands and when its refreshes are due, as the debug log has them
 const anchors = (seen: { logs: string[] }) =>
-  seen.logs.filter(l => l.startsWith('usage-quota: cache anchor: ')).map(l => l.replace('usage-quota: cache anchor: ', ''))
+  seen.logs.filter(l => l.startsWith('headroom: cache anchor: ')).map(l => l.replace('headroom: cache anchor: ', ''))
 const schedules = (seen: { logs: string[] }) =>
-  seen.logs.filter(l => l.startsWith('usage-quota: cache refresh in ')).map(l => l.replace('usage-quota: cache refresh in ', ''))
+  seen.logs.filter(l => l.startsWith('headroom: cache refresh in ')).map(l => l.replace('headroom: cache refresh in ', ''))
 
 // A main turn of a second that ends on response `api`, the turn's usage naming the model
 async function prompt($: Engine, clock: Clock, seen: { api: ModelUsage | null }, api: ModelUsage = API, model = OPUS) {
@@ -237,7 +237,7 @@ test('warmUntil set higher lets it warm', { options: { warmUntil: 90 } }, async 
   await prompt($, clock, seen)
   expect(schedules(seen)).toEqual([expect.stringMatching(/^54m \(1h, idle, expected saving \$/)])
   // the /config row, set from the menu, applies to the warming under way
-  await $.config.set({ key: 'usage-quota.warmUntil', value: 80 } as never)
+  await $.config.set({ key: 'headroom.warmUntil', value: 80 } as never)
   expect(stops(seen)).toEqual(['5 Hour at 87%, past your 80%'])
 })
 
@@ -319,12 +319,12 @@ test('the rate: the meter jump per dollar is learned at each turn end, logged, a
   const { clock, seen, stored } = world(on, { saved: null, limits: plan(10) })
   await $.session.start(START)
   await prompt($, clock, seen)
-  expect(seen.logs).toContain('usage-quota: cache rate: nothing measured (no earlier reading of the same window)')
+  expect(seen.logs).toContain('headroom: cache rate: nothing measured (no earlier reading of the same window)')
   seen.limits = plan(11)
   await prompt($, clock, seen)
   // at 1h: (1,000 * 8 + 199,000 * 0.2 + 300 * 20) / 1e6 = $0.0538
   expect(seen.logs).toContain(
-    'usage-quota: cache rate: five_hour +1.0%, seven_day +0.0% for $0.05 (claude-opus-5-5); sums five_hour 1.0% / $0.05, seven_day 0.0% / $0.05',
+    'headroom: cache rate: five_hour +1.0%, seven_day +0.0% for $0.05 (claude-opus-5-5); sums five_hour 1.0% / $0.05, seven_day 0.0% / $0.05',
   )
   const rate = stored.get('warmRate') as Record<string, { jump: number; usd: number }>
   expect(rate.five_hour?.jump).toBe(1)
@@ -358,7 +358,7 @@ for (const surface of SURFACES) {
     await $.session.start(START)
     // Agent-timed, on by default, registered its tool at the start; the warmer adds none
     expect(seen.registered).toEqual(['compaction'])
-    const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    const ui = await $.ui.mount({ plugin: 'headroom', surface, component: 'AbovePrompt', props: PROPS })
     expect((await ui.find({ type: 'Text', text: 'Keep cache warm' }))?.props.color).toBe('#8b90a0')
     // the dropdown is drawn with warming off too
     expect(await ttlValue(ui)).toBe('auto')
@@ -395,7 +395,7 @@ for (const surface of SURFACES) {
 test('the band: after the first response the lifetime holds for the session; a pick says so, and a /clear frees it', async ($, on) => {
   const { clock, seen } = world(on)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'headroom', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await prompt($, clock, seen)
   await ui.select({ key: 'cacheTtl', value: '5m' })
   expect(await ttlValue(ui)).toBe('5m')
@@ -410,7 +410,7 @@ test('the band: after the first response the lifetime holds for the session; a p
 test("the band: the warmer's status, scheduled, refreshing, with its totals and what kept prompts saved", async ($, on) => {
   const { clock, seen } = world(on)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'headroom', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   expect(await cacheText(ui)).toBeUndefined()
   await prompt($, clock, seen)
   expect(await cacheText(ui)).toBe('Cache warm · refresh in 4m')
@@ -438,7 +438,7 @@ test("the band: the warmer's status, scheduled, refreshing, with its totals and 
 test('the band: a failed refresh shows warming stopped, and why', async ($, on) => {
   const { clock, seen } = world(on)
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'headroom', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   seen.replies.push({ isAnswered: false, reason: 'api-error', status: 429, error: 'rate_limit', usage: ZERO })
   await prompt($, clock, seen)
   await clock.advance(270_000)
@@ -450,7 +450,7 @@ test("the band: with warming off it warns before and after the cache expires, in
   // a subscription held to 5m, so the lifetime passes quickly
   const { clock, seen } = world(on, { saved: { isOn: false, ttl: 'auto' }, limits: plan(10), env: { FORCE_PROMPT_CACHING_5M: '1' } })
   await $.session.start(START)
-  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'headroom', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   await prompt($, clock, seen)
   // no rate yet: the dollars (the band redraws its ages each minute)
   await clock.advance(7 * MIN)
