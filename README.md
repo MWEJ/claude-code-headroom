@@ -108,6 +108,10 @@ What Claude can do, through a small `compaction` tool the mod gives it:
 - **Release** it at a safe point, or **ask to compact** when the turn ends.
 - Leave a **handoff note**. It goes to the summarizer and comes back to Claude after the compaction, once.
 
+While Claude holds, the band says so, with the reason and for how long, and a **Release** button ends the hold from your side:
+
+![The band with Claude holding compaction: "Held by Claude 3m: implementing task 3 of 5" and a Release button, the context at 33%](docs/hold-line.png)
+
 What you see and keep:
 
 - While Claude holds, the band says so: *Held by Claude 12m: mid-refactor of auth*, with **Release** to overrule it, or **Compact now** to overrule it and compact.
