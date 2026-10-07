@@ -832,6 +832,13 @@ async function saveAuto($: EngineInterface, next: AutoCompact): Promise<void> {
 // 80%, Agent-timed from 30%); a chat reopened, or the app restarted, gets back its own. Read again
 // whenever the chat's id changes (a /clear goes on under a new one, unannounced)
 let autoChat: string | undefined
+// a /clear keeps the settings: the cleared chat's Auto compact and Keep cache warm go
+// to the id that follows it, saved under it as if set there, and the hold, the note and
+// the cache chain start over with the context. Nothing else takes a new id unannounced
+let carried: { auto: AutoCompact; warm: WarmSetting } | null = null
+async function carryOnClear($: EngineInterface): Promise<void> {
+  carried = { auto: await read($, autoCompact), warm: await read($, warmSetting) }
+}
 async function chatId($: EngineInterface): Promise<string> {
   try {
     return await $.session.id()
@@ -843,12 +850,18 @@ async function loadAuto($: EngineInterface): Promise<void> {
   const id = await chatId($)
   if (id === autoChat) return
   autoChat = id
-  const saved = await storeGet<AutoCompact>($, `autoCompact:${id}`)
+  const carry = carried
+  carried = null
+  const saved = (await storeGet<AutoCompact>($, `autoCompact:${id}`)) ?? carry?.auto
   isNewChatsOnly = false
   stuck = 'no'
   waitsForCompact = false
   const auto: AutoCompact = saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : DEFAULT_AUTO
   await update($, autoCompact, () => auto)
+  if (carry) {
+    await storeSet($, `autoCompact:${id}`, auto)
+    await storeSet($, `warm:${id}`, carry.warm)
+  }
   await update($, autoAsk, () => null)
   // another chat: what the agent held, noted or asked for belonged to the last one. A
   // reload of the module is not another chat: the state keeps the hold and the note
@@ -1797,6 +1810,7 @@ export const register: Register = (on, options) => {
   // again), and a model switch (each model has its own cache)
   on('session.end', async ($, e, next) => {
     if (e.reason === 'clear') {
+      await carryOnClear($)
       await forget($, 'conversation cleared')
       await update($, warm, s => ({ ...s, isLocked: false, assumed: null }))
     } else await forget($, 'session ended')

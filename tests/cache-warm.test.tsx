@@ -407,6 +407,35 @@ test('the band: after the first response the lifetime holds for the session; a p
   await ui.unmount()
 })
 
+test('a /clear keeps the settings: Auto compact and the cache lifetime follow the chat to the id it goes on under', async ($, on) => {
+  const { clock, seen, stored } = world(on, { saved: null })
+  // the chat's id, as the session answers it: a /clear goes on under a new one
+  let chat = 'chat'
+  on('session.id', () => ({ value: chat }) as never)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ plugin: 'headroom', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  await prompt($, clock, seen)
+  await ui.press({ key: 'auto' })
+  expect(await ui.find(by({ type: 'Svg', alt: 'Auto compact off' }))).toBeDefined()
+  await ui.select({ key: 'cacheTtl', value: '5m' })
+  expect(await ttlValue(ui)).toBe('5m')
+
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } } as never)
+  chat = 'next'
+  await clock.advance(3_000)
+  expect(await ui.find(by({ type: 'Svg', alt: 'Auto compact off' }))).toBeDefined()
+  expect(await ttlValue(ui)).toBe('5m')
+  // saved under the new id: reopened, the chat gets them back
+  expect(stored.get('autoCompact:next')).toMatchObject({ isOn: false })
+  expect(stored.get('warm:next')).toEqual({ isOn: true, ttl: '5m' })
+  // and a chat of its own, opened later, still starts from the defaults
+  chat = 'fresh'
+  await clock.advance(3_000)
+  expect(await ui.find(by({ type: 'Svg', alt: 'Auto compact on' }))).toBeDefined()
+  expect(await ttlValue(ui)).toBe('auto')
+  await ui.unmount()
+})
+
 test("the band: the warmer's status, scheduled, refreshing, with its totals and what kept prompts saved", async ($, on) => {
   const { clock, seen } = world(on)
   await $.session.start(START)

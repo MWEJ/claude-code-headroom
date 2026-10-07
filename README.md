@@ -68,7 +68,7 @@ If the session is already past your % when you turn it on, it asks first:
 - **After my next compact** waits until the session is compacted some other way (Compact, `/compact`, or Claude Code's own), then takes over.
 - **Only in new chats** leaves this session alone until it's next opened.
 
-Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
+Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions. Each session keeps its own Auto compact, Agent-timed and Keep cache warm settings, and a `/clear` keeps them: the cleared session goes on with the same ones, while Claude's hold and note start over with the context.
 
 <details>
 <summary><b>MORE SCREENSHOTS</b></summary>
