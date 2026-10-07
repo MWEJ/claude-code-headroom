@@ -2,7 +2,7 @@
   "name": "headroom",
   "version": "0.1.0",
   "description": "Your Claude plan limits, a forecast of when you'll run out, and your context window, live in a band above the prompt. Compacts in one click, automatically, or when Claude picks the moment, and keeps the prompt cache warm",
-  "author": { "name": "Anant Raghunath", "url": "https://github.com/anantraghunath" },
+  "author": { "name": "Martin Hygge", "url": "https://github.com/MWEJ" },
   "homepage": "https://github.com/MWEJ/claude-code-headroom",
   "repository": "https://github.com/MWEJ/claude-code-headroom",
   "license": "MIT",

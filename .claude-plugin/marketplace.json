@@ -1,7 +1,7 @@
 {
   "name": "claude-code-headroom",
-  "owner": { "name": "Anant Raghunath" },
-  "metadata": { "description": "Claude Code mods by Anant Raghunath" },
+  "owner": { "name": "Martin Hygge" },
+  "metadata": { "description": "Claude Code mods by Martin Hygge" },
   "plugins": [
     {
       "name": "headroom",

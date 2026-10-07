@@ -231,6 +231,8 @@ claude plugin test ./claude-code-headroom
 
 ## Credits
 
+Headroom started as [Claude Code Usage Quota Mod](https://github.com/anantraghunath/claude-code-usage-quota-mod) by Anant Raghunath (MIT): the limits, the forecast, the context window and Auto compact are his work.
+
 Inspired by [I'm liking the new mods feature](https://www.reddit.com/r/ClaudeCode/comments/1wwjman/im_liking_the_new_mods_feature/) on r/ClaudeCode. Thanks to [u/itsxzy](https://www.reddit.com/user/itsxzy/) for sharing the original prompt that started this project.
 
 Agent-timed is inspired by [compactor](https://github.com/rhwendt/compactor) by rhwendt (MIT), which lets the agent hold and release Claude Code's own auto-compaction.
@@ -239,4 +241,4 @@ Keep cache warm is ported from [cache-warmer](https://github.com/paulbkim-dev/cl
 
 ## License
 
-[MIT](LICENSE) © 2026 Anant Raghunath
+[MIT](LICENSE) © 2026 Martin Hygge. Started from [Claude Code Usage Quota Mod](https://github.com/anantraghunath/claude-code-usage-quota-mod) © 2026 Anant Raghunath, MIT.
