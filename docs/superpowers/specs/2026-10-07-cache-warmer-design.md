@@ -152,6 +152,40 @@ Where chains are forgotten: our `session.compact` hook (already there), `session
 `classic.PostModelSwitch` (new, one line each). Auto compact's own compaction goes through the
 `session.compact` path and so forgets the chain the same way.
 
+### 3.5 The expired-cache warning
+
+Whether or not warming is on, the band says what the next prompt costs when the cache is gone.
+Once the main conversation's lifetime has passed since its last request (or refresh) with no
+prompt, where the status line sits:
+
+> `Cache expired 4m ago: your next message rewrites 48.2k tokens, about 0.9% of 5 Hour
+> (warm: 0.05%)` (amber)
+
+and in the minutes before, muted: `Cache expires in 2m: the next message after that rewrites
+48.2k tokens, about 0.9% of 5 Hour`. On an API key the figure is dollars (`about $0.19, warm
+$0.01`), since there is no window to spend. With warming on, the line is the warmer's status
+instead (§3.1), and the warning appears only when the warmer has stopped (idle limit, the
+threshold of §4.1, no price) and the lifetime has passed. With warming off, the line ends with
+the nudge `Keep cache warm would have kept it for about 0.04%`.
+
+The numbers:
+
+- **Tokens:** the anchor's prompt tokens (§3.3), the prefix the next request resends.
+- **Dollars:** `missCostOf` from the policy, the rewrite at 1.25× or 2× input less the warm
+  read, with the model's prices; `warm` is the read alone.
+- **% of a window:** a plan meters usage by cost, not by tokens, so the band learns **how much
+  of the window a dollar moves**: at each main turn's end it already reads the limits and the
+  jump since the last reading (`trackPace`), and `e.usage` on `turn.complete` carries the turn's
+  four counts and model, which the price table turns into dollars. The session keeps
+  `Σ jump / Σ dollars` per window (`five_hour`, `seven_day`), kept in `$.store` per plan across
+  sessions, so a reopened chat has a rate from the first prompt. `percentUsed` has one decimal,
+  so a rate is shown once at least 1% has moved; before that the line gives tokens and dollars
+  alone. The rate is learned from the real meter, so it holds whatever Anthropic's weighting is,
+  as long as it is linear in cost; item 6 of §6 checks that it is.
+
+The warning is where a person sees why warming exists, so it stays even when they never switch
+warming on. It needs no fork and spends nothing.
+
 ### 3.4 Where the code lives
 
 `hooks/hooks.json` takes a list of modules. The warmer can be a second hooks module,
@@ -168,9 +202,10 @@ goes in `register.tsx` as Agent-timed did.
    or Weekly bar is at or past a threshold (say 85%), or when the forecast says the person runs
    out before the reset. The band has both figures; cache-warmer never sees them. A refresh that
    pushes someone over their weekly limit is the one refresh nobody wants.
-2. **Savings in the plan's currency.** Beside dollars, the status line can say what refreshes
-   spent of the window (`0.3% of 5 Hour`) and what the kept prompts would have spent. The band
-   already turns tokens into limit %; the warmer's `Usage` has the tokens.
+2. **Savings in the plan's currency.** The warmer's status line and the expired-cache warning
+   (§3.5) say what a rewrite and a refresh cost of the 5 Hour and Weekly windows, from a rate
+   the band learns off the real meter. cache-warmer counts dollars, which a plan user never
+   sees. Dollars stay for API-key users.
 3. **Compact or warm.** When Agent-timed asks the agent to compact at the start %, the band knows
    the warmer is keeping a 48k prefix warm at $0.01 a refresh; the toast can say what the
    compaction forfeits, and after it the chain is forgotten and starts afresh. No new rule, just
@@ -217,6 +252,10 @@ As with Agent-timed, a spike in a throwaway mod before any plan, into
    runs of seven minutes.
 5. `/config` rows from `userConfig` appear and their `config.set` hooks fire. Headless
    (`claude config set`).
+6. The meter is linear in cost: over ten main turns on the maintainer's subscription, the
+   `five_hour` jump per turn against the turn's dollars (from `e.usage` and the price table)
+   fits a line through the origin within 20%. Interactive, logged to the debug log by the spike
+   mod; ten prompts of varied size.
 
 ## 7. Decided, and what is left
 
@@ -226,9 +265,12 @@ Decided by the maintainer on 2026-10-07:
 2. **The lifetime default is `auto`**: Claude Code already gives a subscription the 1h cache
    within its limits (§3.2); the mod follows that and sets nothing unless asked.
 
+3. **The expired-cache warning** (§3.5), asked for on 2026-10-07: the band warns what the next
+   message costs of the session's limit once the cache has expired, warming on or off.
+
 Still open, with a proposed answer each:
 
-3. The limit threshold of §4.1: a `/config` row `usage-quota.warmUntil`, default 85% of either
+4. The limit threshold of §4.1: a `/config` row `usage-quota.warmUntil`, default 85% of either
    window; past it no refresh is sent and the status line says why.
-4. All-time totals across sessions: kept, as cache-warmer keeps them, in `$.store` under
+5. All-time totals across sessions: kept, as cache-warmer keeps them, in `$.store` under
    `warmAllTime`; the status line shows the session's, a press on it the all-time.
