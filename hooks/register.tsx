@@ -1893,6 +1893,7 @@ export const register: Register = (on, options) => {
       anchor: warmNow.anchor,
       status: warmNow.status,
       totals: warmNow.totals,
+      allTime: warmNow.allTime,
       assumed: warmNow.assumed,
       rate: warmNow.rate,
       limits: snap.limits,

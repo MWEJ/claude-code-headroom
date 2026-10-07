@@ -372,16 +372,21 @@ export type CacheLine = { text: string; tone: 'muted' | 'amber' }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-// the warmer's own line while it is on: scheduled, refreshing, or stopped and why
-export function warmStatusText(status: WarmStatus, totals: WarmTotals, now: number, assumed: Ttl | null = null): CacheLine | null {
+// what the refreshes cost and saved: "3 refreshes this session, $0.04, saved $0.31"
+function totalsText(totals: WarmTotals, span: string): string {
+  return `${plural(totals.refreshes, 'refresh', 'refreshes')} ${span}, ${formatUsd(totals.costUsd)}${totals.keptUsd > 0 ? `, saved ${formatUsd(totals.keptUsd)}` : ''}`
+}
+
+// the warmer's own line while it is on: scheduled, refreshing, or stopped and why; with
+// this session's totals, and all time's where earlier sessions add to them
+export function warmStatusText(status: WarmStatus, totals: WarmTotals, now: number, assumed: Ttl | null = null, allTime: WarmTotals | null = null): CacheLine | null {
   if (status.state === 'refreshing') return { text: 'Refreshing the cache…', tone: 'amber' }
   if (status.state === 'stopped') return { text: `Warming ${status.isPaused ? 'paused' : 'stopped'}: ${status.reason}`, tone: 'muted' }
   if (status.state !== 'scheduled') return null
   const parts = [`Cache warm`, `refresh in ${spanOf(status.nextAt - now)}`]
   if (assumed) parts.push(`${assumed} assumed`)
-  if (totals.refreshes > 0) {
-    parts.push(`${plural(totals.refreshes, 'refresh', 'refreshes')} this session, ${formatUsd(totals.costUsd)}${totals.keptUsd > 0 ? `, saved ${formatUsd(totals.keptUsd)}` : ''}`)
-  }
+  if (totals.refreshes > 0) parts.push(totalsText(totals, 'this session'))
+  if (allTime && allTime.refreshes > totals.refreshes) parts.push(totalsText(allTime, 'all time'))
   return { text: parts.join(' · '), tone: 'muted' }
 }
 
@@ -422,6 +427,8 @@ export type CacheLineInput = {
   anchor: WarmAnchor | null
   status: WarmStatus
   totals: WarmTotals
+  /** every session's totals, this one's included */
+  allTime: WarmTotals | null
   assumed: Ttl | null
   rate: WarmRate
   limits: readonly Limit[]
@@ -438,7 +445,7 @@ export function cacheLineOf(i: CacheLineInput): CacheLine | null {
   const expiresAt = a.lastAt + TTL_MS[a.ttl]
   const isExpired = i.now >= expiresAt
   if (i.isOn) {
-    const line = warmStatusText(i.status, i.totals, i.now, i.assumed)
+    const line = warmStatusText(i.status, i.totals, i.now, i.assumed, i.allTime)
     if (line && !(i.status.state === 'stopped' && isExpired)) return line
   }
   const view = viewOf(i.rate, i.limits)

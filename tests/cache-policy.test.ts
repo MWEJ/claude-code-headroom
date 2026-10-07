@@ -190,6 +190,12 @@ test("the warmer's status line", () => {
   expect(warmStatusText(scheduled, addTotals(ZERO_TOTALS, { refreshes: 1, costUsd: 0.01 }), now, '5m')?.text).toBe(
     'Cache warm · refresh in 38m · 5m assumed · 1 refresh this session, $0.01',
   )
+  // all time is named once earlier sessions add to it, never when it is this session alone
+  const allTime = { ...ZERO_TOTALS, refreshes: 42, costUsd: 0.6, keptUsd: 4.1 }
+  expect(warmStatusText(scheduled, totals, now, null, allTime)?.text).toBe(
+    'Cache warm · refresh in 38m · 3 refreshes this session, $0.04, saved $0.31 · 42 refreshes all time, $0.60, saved $4.10',
+  )
+  expect(warmStatusText(scheduled, totals, now, null, totals)?.text).toBe('Cache warm · refresh in 38m · 3 refreshes this session, $0.04, saved $0.31')
   expect(warmStatusText({ state: 'refreshing' }, totals, now)).toEqual({ text: 'Refreshing the cache…', tone: 'amber' })
   expect(warmStatusText({ state: 'stopped', reason: 'cache had expired' }, totals, now)).toEqual({ text: 'Warming stopped: cache had expired', tone: 'muted' })
   expect(warmStatusText({ state: 'stopped', reason: '5 Hour at 87%, past your 85%', isPaused: true }, totals, now)?.text).toBe(
@@ -214,7 +220,7 @@ test('the band\'s cache line: the status while warming, the warning when off or 
   const lastAt = 1_000_000
   const anchor = { at: lastAt, lastAt, model: OPUS, promptTokens: 48_200, ttl: '1h' as const, refreshes: 0, idleRefreshes: 0, feeUsd: 0, isStopped: false }
   const base: CacheLineInput = {
-    isOn: false, anchor, status: { state: 'waiting' }, totals: ZERO_TOTALS, assumed: null,
+    isOn: false, anchor, status: { state: 'waiting' }, totals: ZERO_TOTALS, allTime: null, assumed: null,
     rate: { five_hour: { jump: 2, usd: 1 } }, limits: limits(10, 10), outputTokens: DEFAULT_OUTPUT_TOKENS, now: lastAt + 10 * MIN,
   }
   const expiresAt = lastAt + 3_600_000
