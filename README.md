@@ -54,7 +54,7 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 **Prompt cache**
 - Once the cache has expired, the band says what your next message costs to write it again, in your 5 Hour limit's %: *Cache expired 4m ago: your next message rewrites 48.2k tokens, about 0.9% of 5 Hour (warm: 0.05%)*. In the two minutes before, it says it is about to. The % is learned from how far your limit moves per dollar of replies; until a whole point has moved (and on an API key) it says dollars.
-- **Keep cache warm** (optional, off by default) refreshes the cache before it expires, so the first message after a break reads it instead. See [Keep cache warm](#keep-cache-warm).
+- **Keep cache warm** (on by default, set per session) refreshes the cache before it expires, so the first message after a break reads it instead. See [Keep cache warm](#keep-cache-warm).
 
 If the session is already past your % when you turn it on, it asks first:
 
@@ -125,7 +125,7 @@ With **Keep cache warm** on, the mod sends one small request shortly before the 
 - The band says what it is doing: *Cache warm · refresh in 38m · 3 refreshes this session, $0.04, saved $0.31*, or why it stopped. Compacting, `/clear`, a model switch or a failed refresh start it afresh with your next message.
 
 > [!IMPORTANT]
-> **Each refresh counts against your plan** like any other request: a cache read of the conversation and a few output tokens. That is why it is **off by default** and set per session. The expired-cache warning shows what the refreshes save, in the same 5 Hour %, warming on or off.
+> **Each refresh counts against your plan** like any other request: a cache read of the conversation and a few output tokens. It is set per session: switch it off in the band for a chat that should send none. The expired-cache warning shows what the refreshes save, in the same 5 Hour %, warming on or off.
 
 With this on, **disable [cache-warmer](https://github.com/paulbkim-dev/claude-code-cache-warmer) if you have it installed**: both would warm the same cache.
 

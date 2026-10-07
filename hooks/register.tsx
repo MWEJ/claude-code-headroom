@@ -45,7 +45,7 @@ const WARM_EMPTY: Warm = {
   lastLimits: null,
 }
 const warm = atom({ plugin: 'usage-quota', key: 'warm' } as const, WARM_EMPTY)
-const warmSetting = atom({ plugin: 'usage-quota', key: 'warmSetting' } as const, { isOn: false, ttl: 'auto' } as WarmSetting)
+const warmSetting = atom({ plugin: 'usage-quota', key: 'warmSetting' } as const, { isOn: true, ttl: 'auto' } as WarmSetting)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -1257,9 +1257,11 @@ async function warmTurnEnd($: EngineInterface, usage: TurnUsage | undefined, end
 
 // the chat's switch and lifetime, kept per chat; a chat that never set them starts off,
 // at the /config default lifetime. Another chat starts its chain and totals afresh
+// warming is set per chat: a chat that never had it opens with it on, at the lifetime
+// new chats start with; a chat reopened gets back its own
 async function loadWarm($: EngineInterface, id: string): Promise<void> {
   const saved = await storeGet<WarmSetting>($, `warm:${id}`)
-  await update($, warmSetting, () => ({ isOn: saved?.isOn === true, ttl: isTtlChoice(saved?.ttl) ? saved.ttl : defaultChoice }))
+  await update($, warmSetting, () => ({ isOn: saved ? saved.isOn === true : true, ttl: isTtlChoice(saved?.ttl) ? saved.ttl : defaultChoice }))
   const state = await read($, warm)
   if (state.chat !== id) {
     if (state.anchor) await forget($, 'another conversation')

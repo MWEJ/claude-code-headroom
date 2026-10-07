@@ -136,8 +136,8 @@ async function prompt($: Engine, clock: Clock, seen: { api: ModelUsage | null },
   await $.turn.complete({ answer: 'done', durationMs: 1_000, isAborted: false, turnId: 't1', reason: 'answer', usage: { ...api, model } } as never)
 }
 
-test('warming is off until switched on: a turn end anchors nothing that forks, and nothing is set', async ($, on) => {
-  const { clock, seen } = world(on, { saved: null })
+test('warming switched off: a turn end anchors nothing that forks, and nothing is set', async ($, on) => {
+  const { clock, seen } = world(on, { saved: { isOn: false, ttl: 'auto' } })
   await $.session.start(START)
   await prompt($, clock, seen)
   await clock.advance(5 * MIN)
@@ -354,7 +354,7 @@ const cacheText = async (ui: Ui) => (await ui.find({ type: 'Text', text: /^(Cach
 
 for (const surface of SURFACES) {
   test(`the band (${surface}): the switch turns warming on for this chat and registers nothing of its own; the lifetime dropdown picks auto, 5m or 1h`, async ($, on) => {
-    const { seen, stored } = world(on, { saved: null })
+    const { seen, stored } = world(on, { saved: { isOn: false, ttl: 'auto' } })
     await $.session.start(START)
     // Agent-timed, on by default, registered its tool at the start; the warmer adds none
     expect(seen.registered).toEqual(['compaction'])
@@ -448,7 +448,7 @@ test('the band: a failed refresh shows warming stopped, and why', async ($, on) 
 
 test("the band: with warming off it warns before and after the cache expires, in the 5 Hour limit's % once a rate is learned", async ($, on) => {
   // a subscription held to 5m, so the lifetime passes quickly
-  const { clock, seen } = world(on, { saved: null, limits: plan(10), env: { FORCE_PROMPT_CACHING_5M: '1' } })
+  const { clock, seen } = world(on, { saved: { isOn: false, ttl: 'auto' }, limits: plan(10), env: { FORCE_PROMPT_CACHING_5M: '1' } })
   await $.session.start(START)
   const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   await prompt($, clock, seen)
