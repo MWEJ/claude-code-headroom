@@ -40,6 +40,63 @@ export type AgentTimed = {
   overridden: { reason: string; percent: number } | null
 }
 
+/** Keep cache warm: the prompt cache's lifetime, and the chat's choice of it (`auto`: Claude Code's own) */
+export type Ttl = '5m' | '1h'
+export type TtlChoice = 'auto' | Ttl
+/** a request's four token counts, in the policy's spelling */
+export type CacheUsage = { input: number; output: number; cacheRead: number; cacheWrite: number }
+export type WarmTotals = {
+  refreshes: number
+  costUsd: number
+  /** the fees of refresh chains no kept prompt followed */
+  wastedUsd: number
+  kept: number
+  /** the rewrites kept prompts avoided */
+  keptUsd: number
+}
+/** the main conversation's last request: the prefix a fork replays and keeps warm */
+export type WarmAnchor = {
+  at: number
+  lastAt: number
+  model: string
+  promptTokens: number
+  ttl: Ttl
+  refreshes: number
+  /** refreshes sent while no turn ran: the idle limit counts these */
+  idleRefreshes: number
+  /** what this chain's refreshes cost: wasted unless the next prompt is kept */
+  feeUsd: number
+  isStopped: boolean
+}
+export type WarmStatus =
+  | { state: 'waiting' }
+  | { state: 'scheduled'; nextAt: number; phase: 'run' | 'idle'; expectedUsd: number }
+  | { state: 'refreshing' }
+  /** `isPaused`: stopped by the warmUntil threshold, which the band words as a pause */
+  | { state: 'stopped'; reason: string; isPaused?: boolean }
+/** per window kind: the % the meter moved and the dollars spent meanwhile, summed */
+export type WarmRate = Record<string, { jump: number; usd: number }>
+/** Keep cache warm, the session's side: the chain, the lifetime in force, the totals, the learned rate */
+export type Warm = {
+  anchor: WarmAnchor | null
+  status: WarmStatus
+  isRunning: boolean
+  outputTokens: number
+  /** the first main response wrote the cache: its lifetime holds for the session */
+  isLocked: boolean
+  /** the lifetime in force */
+  ttl: Ttl
+  /** set when a refresh found a 1h cache gone: 5m from then, for the session */
+  assumed: Ttl | null
+  totals: WarmTotals
+  allTime: WarmTotals & { since: number }
+  rate: WarmRate
+  /** the limits at the last main turn's end: the jump is measured from them */
+  lastLimits: Limit[] | null
+}
+/** Keep cache warm, the chat's setting (kept for every chat): on or off, and the lifetime */
+export type WarmSetting = { isOn: boolean; ttl: TtlChoice }
+
 declare module 'claude-code' {
   interface PluginState {
     'usage-quota': {
@@ -58,6 +115,10 @@ declare module 'claude-code' {
       startText: string | null
       /** the desktop app's theme, as its settings (or the OS) have it */
       theme: 'dark' | 'light'
+      /** Keep cache warm: the chain, the lifetime, the totals and the learned rate */
+      warm: Warm
+      /** Keep cache warm, this chat's switch and lifetime */
+      warmSetting: WarmSetting
     }
   }
 }
