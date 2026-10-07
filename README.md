@@ -49,7 +49,7 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 **Compacting**
 - **Compact** runs `/compact` in one click.
-- **Auto compact** runs at your % (80% by default, 15 to 99), never mid-reply. Each session keeps its own setting; a new session starts with it off.
+- **Auto compact** runs at your % (80% by default, 15 to 99), never mid-reply. Each session keeps its own setting; a new session starts with it on, Agent-timed included.
 - **Agent-timed** (optional, beside Auto compact) lets Claude choose the moment below that %. See [Agent-timed](#agent-timed).
 
 **Prompt cache**
@@ -106,11 +106,12 @@ What Claude can do, through a small `compaction` tool the mod gives it:
 What you see and keep:
 
 - While Claude holds, the band says so: *Held by Claude 12m: mid-refactor of auth*, with **Compact now** and **Release** to overrule it.
+- Every **5 minutes** of a hold, Claude is asked where it stands: keep the hold with its current reason, release it, or leave a note.
 - Claude is told when the context passes the start %, so a compaction never comes unannounced.
 - While subagents Claude is waiting on are still running, compaction waits for them, up to your Auto compact %.
 - Only the main agent can hold. Subagents cannot.
 
-Agent-timed is off until you switch it on, and each session keeps its own setting. Switching it on adds the tool to that session; switched off again, the tool stays listed until the session is reopened, and answers that the mode is off.
+Agent-timed is on in a new session, from 30%, and each session keeps its own setting. Switching it on adds the tool to that session; switched off again, the tool stays listed until the session is reopened, and answers that the mode is off.
 
 ## Keep cache warm
 
@@ -120,7 +121,7 @@ With **Keep cache warm** on, the mod sends one small request shortly before the 
 
 - **It sends only when it pays.** A refresh goes out only when it is expected to save at least **$0.05**: always worth it while Claude is working, and at a 15% chance of your next message while you are away. A small conversation is below that, and is not warmed.
 - **Two numbers bound it:** at most **5 refreshes** per lifetime while you are away (set 0 to 20, separately for 5m and 1h), and none while your 5 Hour or Weekly limit is at or past **85%**. Both are `/config` rows (`usage-quota.idle5m`, `usage-quota.idle1h`, `usage-quota.warmUntil`).
-- **The lifetime follows Claude Code.** The button beside the switch reads **auto** by default: 1 hour on a Claude subscription within its limits, 5 minutes on an API key or once in overage, as Claude Code chooses (and as `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `ENABLE_PROMPT_CACHING_1H` or the `promptCacheTtl` setting say). Press it for **5m** or **1h** to choose. The first reply of a session writes the cache, so a choice made after it applies to new sessions. `usage-quota.cacheTtl` in `/config` sets what new chats start with.
+- **The lifetime follows Claude Code.** The **Cache** dropdown in the band's top row reads **auto** by default: 1 hour on a Claude subscription within its limits, 5 minutes on an API key or once in overage, as Claude Code chooses (and as `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `ENABLE_PROMPT_CACHING_1H` or the `promptCacheTtl` setting say). Pick **5m** or **1h** to choose for this session, warming on or off. The first reply of a session writes the cache, so a choice made after it applies to new sessions. `usage-quota.cacheTtl` in `/config` sets what new chats start with.
 - The band says what it is doing: *Cache warm · refresh in 38m · 3 refreshes this session, $0.04, saved $0.31*, or why it stopped. Compacting, `/clear`, a model switch or a failed refresh start it afresh with your next message.
 
 > [!IMPORTANT]

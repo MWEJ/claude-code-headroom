@@ -267,10 +267,16 @@ for (const [name, w, ttl] of LIFETIMES) {
 }
 
 
-test('a chosen lifetime is set in the variable at once; auto, or warming off, sets nothing', async ($, on) => {
+test('a chosen lifetime is set in the variable at once, warming on or off; auto sets nothing', async ($, on) => {
   const { seen } = world(on, { saved: { isOn: true, ttl: '1h' } })
   await $.session.start(START)
   expect(seen.envSets).toEqual([['CLAUDE_CODE_PROMPT_CACHE_TTL', '1h']])
+})
+
+test('a chosen lifetime is set with warming off too: the dropdown is the chat\'s, not the warmer\'s', async ($, on) => {
+  const { seen } = world(on, { saved: { isOn: false, ttl: '5m' } })
+  await $.session.start(START)
+  expect(seen.envSets).toEqual([['CLAUDE_CODE_PROMPT_CACHE_TTL', '5m']])
 })
 
 test('the chain is forgotten by a compaction, a /clear, the session ending and a model switch', async ($, on) => {
@@ -342,53 +348,61 @@ const PROPS = { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 12
 // the kit matches any prop (a Button's label, an Svg's alt); its query type names only a few
 const by = (query: ElementQuery & { label?: string; alt?: string }): ElementQuery => query
 type Ui = { find: (q: ElementQuery) => Promise<{ text?: string; props: Record<string, unknown> } | undefined> }
-const ttlLabel = async (ui: Ui) => (await ui.find({ key: 'warmTtl' }))?.props.label
+// the lifetime dropdown's value, drawn warming on or off
+const ttlValue = async (ui: Ui) => (await ui.find({ key: 'cacheTtl' }))?.props.value
 const cacheText = async (ui: Ui) => (await ui.find({ type: 'Text', text: /^(Cache |Refreshing|Warming )/ }))?.text
 
 for (const surface of SURFACES) {
-  test(`the band (${surface}): the switch turns warming on for this chat and registers nothing; the lifetime goes auto, 5m, 1h, auto`, async ($, on) => {
+  test(`the band (${surface}): the switch turns warming on for this chat and registers nothing of its own; the lifetime dropdown picks auto, 5m or 1h`, async ($, on) => {
     const { seen, stored } = world(on, { saved: null })
     await $.session.start(START)
+    // Agent-timed, on by default, registered its tool at the start; the warmer adds none
+    expect(seen.registered).toEqual(['compaction'])
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
     expect((await ui.find({ type: 'Text', text: 'Keep cache warm' }))?.props.color).toBe('#8b90a0')
-    expect(await ui.find({ key: 'warmTtl' })).toBeUndefined()
+    // the dropdown is drawn with warming off too
+    expect(await ttlValue(ui)).toBe('auto')
     if (surface === 'desktop') expect(await ui.find(by({ type: 'Svg', alt: 'Keep cache warm off' }))).toBeDefined()
     else expect(await ui.find(by({ type: 'Button', label: '○' }))).toBeDefined()
 
     await ui.press({ key: 'warm' })
     expect(stored.get('warm:chat')).toEqual({ isOn: true, ttl: 'auto' })
-    expect(seen.registered).toEqual([])
+    expect(seen.registered).toEqual(['compaction'])
     expect(seen.envSets).toEqual([])
     expect((await ui.find({ type: 'Text', text: 'Keep cache warm' }))?.props.color).toBeUndefined()
     if (surface === 'desktop') expect(await ui.find(by({ type: 'Svg', alt: 'Keep cache warm on' }))).toBeDefined()
-    expect(await ttlLabel(ui)).toBe('auto')
+    expect(await ttlValue(ui)).toBe('auto')
 
     // a chosen lifetime is set in the variable while no response has written the cache
-    for (const [label, set] of [['5m', '5m'], ['1h', '1h'], ['auto', undefined]] as const) {
-      await ui.press({ key: 'warmTtl' })
-      expect(await ttlLabel(ui)).toBe(label)
+    for (const [value, set] of [['5m', '5m'], ['1h', '1h'], ['auto', undefined]] as const) {
+      await ui.select({ key: 'cacheTtl', value })
+      expect(await ttlValue(ui)).toBe(value)
       expect(seen.envSets.at(-1)).toEqual(['CLAUDE_CODE_PROMPT_CACHE_TTL', set])
     }
     expect(stored.get('warm:chat')).toEqual({ isOn: true, ttl: 'auto' })
 
     await ui.press({ key: 'warm' })
-    expect(await ui.find({ key: 'warmTtl' })).toBeUndefined()
+    expect(await ttlValue(ui)).toBe('auto')
     expect(stored.get('warm:chat')).toEqual({ isOn: false, ttl: 'auto' })
+    // the pick holds with warming off
+    await ui.select({ key: 'cacheTtl', value: '1h' })
+    expect(seen.envSets.at(-1)).toEqual(['CLAUDE_CODE_PROMPT_CACHE_TTL', '1h'])
+    expect(stored.get('warm:chat')).toEqual({ isOn: false, ttl: '1h' })
     await ui.unmount()
   })
 }
 
-test('the band: after the first response the lifetime holds for the session; a press says so, and a /clear frees it', async ($, on) => {
+test('the band: after the first response the lifetime holds for the session; a pick says so, and a /clear frees it', async ($, on) => {
   const { clock, seen } = world(on)
   await $.session.start(START)
   const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await prompt($, clock, seen)
-  await ui.press({ key: 'warmTtl' })
-  expect(await ttlLabel(ui)).toBe('5m')
+  await ui.select({ key: 'cacheTtl', value: '5m' })
+  expect(await ttlValue(ui)).toBe('5m')
   expect(seen.envSets).toEqual([])
   expect(seen.toasts).toContain("Cache lifetime 5m applies to new sessions: this one's cache is written at 5m")
   await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } } as never)
-  await ui.press({ key: 'warmTtl' })
+  await ui.select({ key: 'cacheTtl', value: '1h' })
   expect(seen.envSets).toEqual([['CLAUDE_CODE_PROMPT_CACHE_TTL', '1h']])
   await ui.unmount()
 })

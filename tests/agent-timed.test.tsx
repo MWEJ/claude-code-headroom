@@ -374,7 +374,7 @@ const capKey = async (ui: { findAll: (q: { type: 'Input' }) => Promise<{ props: 
 for (const surface of SURFACES) {
   test(`the band (${surface}): Agent-timed shows beside auto compact, with its own % field kept between 10 and one below the cap`, async ($, on) => {
     const percent = { value: 16 }
-    const { seen } = world(on, percent, null)
+    const { seen } = world(on, percent, { isOn: false, at: 80 })
     await $.session.start(START)
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
     // auto compact off: no sign of it
@@ -528,4 +528,55 @@ test('the band: a narrow chat keeps every control, wrapped', async ($, on) => {
     expect(await ui.find({ key: 'compact' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a chat that never had a setting opens with Auto compact at 80% and Agent-timed from 30%, both on', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock, seen } = world(on, percent, null)
+  await $.session.start(START)
+  expect(seen.registered).toEqual(['compaction'])
+
+  await into($, clock, percent, 35)
+  await end($, clock)
+  expect(seen.compacted).toEqual([])
+  expect(rows(seen)).toEqual([expect.stringMatching(/^Agent-timed compaction: context is at 35% \(starts at 30%, cap 80%\)/)])
+  await $.turn.start(GO)
+  await end($, clock)
+  expect(seen.compacted).toEqual([undefined])
+  expect(seen.toasts).toContain('Context at 35%: auto compacting (Agent-timed from 30%)')
+})
+
+test('while holding: every 5 minutes the agent is asked where the hold stands, and a fresh hold starts the clock over', async ($, on) => {
+  const percent = { value: 20 }
+  const { clock } = world(on, percent)
+  await $.session.start(START)
+
+  await into($, clock, percent, 35)
+  await bash($)
+  await tool($, { action: 'hold', reason: 'mid-refactor of auth' })
+  await clock.advance(4 * 60_000)
+  expect(await bash($)).toEqual([])
+  await clock.advance(60_000)
+  expect(await bash($)).toEqual([
+    'Agent-timed compaction: you have held compaction for 5m (mid-refactor of auth). ' +
+      'Update the hold: call the compaction tool with action "hold" and the current reason to keep it, "release" if the fragile step is done, or "note" what must survive.\n' +
+      'Context 35%. Agent-timed compaction starts at 30%; at 80% it runs whatever is held.',
+  ])
+  // said once, then not until another 5 minutes have passed
+  expect(await bash($)).toEqual([])
+  await clock.advance(5 * 60_000)
+  expect(await bash($)).toEqual([expect.stringMatching(/^Agent-timed compaction: you have held compaction for 10m/)])
+
+  // the hold updated: the next ask is 5 minutes from that, and the time held runs on
+  await clock.advance(3 * 60_000)
+  await tool($, { action: 'hold', reason: 'tests 3 to 5' })
+  await clock.advance(3 * 60_000)
+  expect(await bash($)).toEqual([])
+  await clock.advance(2 * 60_000)
+  expect(await bash($)).toEqual([expect.stringMatching(/^Agent-timed compaction: you have held compaction for 18m \(tests 3 to 5\)/)])
+
+  // released: nothing more
+  await tool($, { action: 'release' })
+  await clock.advance(10 * 60_000)
+  expect(await bash($)).toEqual([])
 })

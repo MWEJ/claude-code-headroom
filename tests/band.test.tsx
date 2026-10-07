@@ -48,6 +48,8 @@ function usage(rateLimits: SessionRateLimit[]): SessionUsage {
 }
 
 const iso = (ms: number) => new Date(NOW + ms).toISOString()
+// the weekday the band names for a time, in the machine's own zone, as the band does
+const weekdayOf = (ms: number) => new Date(NOW + ms).toLocaleDateString('en-US', { weekday: 'long' })
 
 function world(on: On, rateLimits: SessionRateLimit[], status: (string | undefined)[] = []) {
   mock.clock(on, { now: NOW })
@@ -135,7 +137,7 @@ test('draws the band on track', async ($, on) => {
     if (surface === 'desktop') {
       // thin Svg bars: the context bar and the two rate bars, no flexGrow segments
       // (the auto compact and Keep cache warm switches are Svgs too: left out here)
-      const svgs = (await ui.findAll({ type: 'Svg' })).filter(svg => !/^(Auto compact|Keep cache warm)/.test(String(svg.props.alt)))
+      const svgs = (await ui.findAll({ type: 'Svg' })).filter(svg => !/^(Auto compact|Agent-timed|Keep cache warm)/.test(String(svg.props.alt)))
       // the two rate bars (left, each with a forecast tick), then the context bar (right)
       expect(svgs).toHaveLength(3)
       expect(svgs[0]?.props.alt).toMatch(/^5 Hour/)
@@ -180,7 +182,7 @@ test('says when a limit is reached', async ($, on) => {
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
-    expect(await ui.find({ text: /^Limit reached\. Usage resumes at Tuesday \d+:\d\d [AP]M\.$/ })).toBeDefined()
+    expect(await ui.find({ text: new RegExp(`^Limit reached\\. Usage resumes at ${weekdayOf(2 * 24 * HOUR)} \\d+:\\d\\d [AP]M\\.$`) })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -501,7 +503,9 @@ const TURN = { answer: 'done', durationMs: 1_000, isAborted: false, turnId: 't1'
 
 function startWorld(on: On, percentRef: { value: number; isCompacted?: boolean }, ran: string[], asked: string[] = [], answer = 'Compact now', seed: Record<string, unknown> = {}) {
   const clock = mock.clock(on, { now: NOW })
-  mock.store(on, seed)
+  // this chat has auto compact off unless the seed says otherwise: the tests below
+  // switch it on themselves
+  mock.store(on, { 'autoCompact:chat': { isOn: false, at: 80 }, ...seed })
   on('session.usage', () => {
     const u = usage([{ kind: 'seven_day', percentUsed: 10, resetsAt: iso(3 * 24 * HOUR) }])
     // just compacted: no reply yet, so no real total
@@ -720,34 +724,24 @@ test('"After my next compact" holds through a % flickering below, until a real c
   await ui.unmount()
 })
 
-test('auto compact is per chat: another chat opens with it off, at 80%; turned on past it, it asks and waits', async ($, on) => {
+test('auto compact is per chat: a chat that never had it opens with the default, on at 80% and Agent-timed from 30%; past the cap it compacts', async ($, on) => {
   const percent: { value: number; isCompacted?: boolean } = { value: 85 }
   const ran: string[] = []
-  // another chat has it on at 20%
+  // another chat has it on at 20%, and this one is saved off: neither is "this"
   const clock = startWorld(on, percent, ran, [], 'Compact now', { 'autoCompact:other': { isOn: true, at: 20 } })
   on('session.id', () => ({ value: 'this' }) as never)
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__usage-quota__${e.name}` } }))
   await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
+  // nobody switched it on, so no question: idle past the cap, it compacts at once
   await clock.advance(3_000)
-  expect(ran).toEqual([])
+  expect(ran).toEqual(['compact'])
 
   const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
-  expect(await ui.find(by({ type: 'Svg', alt: 'Auto compact off' }))).toBeDefined()
-  await ui.press({ key: 'auto' })
-  expect((await ui.find({ type: 'Input' }))?.props.value).toBe('80')
-  expect(await ui.find({ type: 'Text', text: /already at 85%, past 80%/ })).toBeDefined()
-  // left unanswered: as "after my next compact"
-  await $.turn.complete(TURN)
-  await clock.advance(3_000)
-  expect(ran).toEqual([])
-  percent.value = 5
-  percent.isCompacted = true
-  await clock.advance(3_000)
+  expect(await ui.find(by({ type: 'Svg', alt: 'Auto compact on' }))).toBeDefined()
+  expect(await ui.find(by({ type: 'Svg', alt: 'Agent-timed on' }))).toBeDefined()
+  const fields = await ui.findAll({ type: 'Input' })
+  expect(fields.map(f => f.props.value)).toEqual(['80', '30'])
   expect(await ui.find({ type: 'Text', text: /already at/ })).toBeUndefined()
-  percent.isCompacted = false
-  percent.value = 81
-  await $.turn.complete(TURN)
-  await clock.advance(1_100)
-  expect(ran).toEqual(['compact'])
   await ui.unmount()
 })
 

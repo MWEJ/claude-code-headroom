@@ -3,14 +3,14 @@ import type { EngineInterface, ModelForkResult, ModelUsage, Register, SessionRat
 
 import type { AgentTimed, AutoCompact, Category, Limit, PaceOf, Snapshot, Ttl, TtlChoice, Warm, WarmAnchor, WarmRate, WarmSetting, WarmTotals } from '../types'
 import {
-  AT_DEFAULT, EMPTY, REASON_SHOWN, START_DEFAULT, START_MIN, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
-  afterText, answerTool, breakpointOf, breakpointText, capOf, decide, isTimed, nudgeLevel, nudgeText, startOf, stepNudge, toldText, withNote,
+  AT_DEFAULT, DEFAULT_AUTO, EMPTY, REASON_SHOWN, START_DEFAULT, START_MIN, TOOL, TOOL_DESCRIPTION, TOOL_NAME, TOOL_SCHEMA,
+  afterText, answerTool, breakpointOf, breakpointText, capOf, decide, holdReminder, isTimed, nudgeLevel, nudgeText, startOf, stepNudge, toldText, withNote,
 } from './agent-policy'
 import type { Stuck, ToolInput } from './agent-policy'
 import {
   DEFAULT_OUTPUT_TOKENS, FORK_PROMPT, IDLE_LIMIT_DEFAULT, TTL_MS, WARM_UNTIL_DEFAULT, ZERO_TOTALS,
   addRate, addTotals, cacheLineOf, costOf, deadlineOf, decide as decideWarm, delayOf, formatDuration, formatTokens, formatUsd, horizonOf, idleStopNotice,
-  idleStopReason, isEnvOn, isTtlChoice, jumpsOf, limitOf, missCostOf, nextChoice, noticeText, outcomeOf, pastLimitOf, planOf, ttlOf,
+  idleStopReason, isEnvOn, isTtlChoice, jumpsOf, limitOf, missCostOf, noticeText, outcomeOf, pastLimitOf, planOf, ttlOf,
   usageOf, warmUntilOf,
 } from './cache-policy'
 import type { ForkReply, Refresh } from './cache-policy'
@@ -18,7 +18,7 @@ import type { ForkReply, Refresh } from './cache-policy'
 const snapshot = atom({ plugin: 'usage-quota', key: 'snapshot' } as const, null)
 const isOn = atom({ plugin: 'usage-quota', key: 'isOn' } as const, true)
 const isCollapsed = atom({ plugin: 'usage-quota', key: 'isCollapsed' } as const, false)
-const autoCompact = atom({ plugin: 'usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
+const autoCompact = atom({ plugin: 'usage-quota', key: 'autoCompact' } as const, DEFAULT_AUTO)
 // what Agent-timed holds for the session: the agent's hold, note and request, and what it has been told
 const agentTimed = atom({ plugin: 'usage-quota', key: 'agentTimed' } as const, EMPTY as AgentTimed)
 const fieldTick = atom({ plugin: 'usage-quota', key: 'fieldTick' } as const, 0)
@@ -672,11 +672,13 @@ async function dropAsked($: EngineInterface): Promise<void> {
 }
 
 // What rides on a main-agent tool result: word that the start % is passed (once a
-// cycle), the reminders of a hold growing old, and a breakpoint after a commit or a
-// passing test run (`command`: a Bash command that succeeded, else null).
+// cycle), the reminders of a hold growing old, the five-minute ask for where a hold
+// stands, and a breakpoint after a commit or a passing test run (`command`: a Bash
+// command that succeeded, else null).
 async function linesFor($: EngineInterface, command: string | null): Promise<string[]> {
   const auto = await read($, autoCompact)
   if (!isTimed(auto)) return []
+  const now = await $.clock.now()
   const startAt = startOf(auto)
   const cap = capOf(auto)
   const percent = lastPercent
@@ -699,7 +701,13 @@ async function linesFor($: EngineInterface, command: string | null): Promise<str
       nudge = { ...nudge, isBreakpointSaid: true }
     }
   }
-  if (told !== state.told || nudge !== state.nudge) await update($, agentTimed, s => ({ ...s, told, nudge }))
+  let hold = state.hold
+  const reminder = holdReminder(state, now, percent, startAt, cap)
+  if (reminder) {
+    lines.push(reminder.text)
+    hold = reminder.state.hold
+  }
+  if (told !== state.told || nudge !== state.nudge || hold !== state.hold) await update($, agentTimed, s => ({ ...s, told, nudge, hold }))
   return lines
 }
 
@@ -820,8 +828,8 @@ async function saveAuto($: EngineInterface, next: AutoCompact): Promise<void> {
   await storeSet($, `autoCompact:${autoChat ?? (await chatId($))}`, next)
 }
 
-// auto compact is set per chat: a chat that never had it opens with it off (at the
-// default %); a chat reopened, or the app restarted, gets back its own. Read again
+// auto compact is set per chat: a chat that never had it opens with the default (on at
+// 80%, Agent-timed from 30%); a chat reopened, or the app restarted, gets back its own. Read again
 // whenever the chat's id changes (a /clear goes on under a new one, unannounced)
 let autoChat: string | undefined
 async function chatId($: EngineInterface): Promise<string> {
@@ -839,11 +847,12 @@ async function loadAuto($: EngineInterface): Promise<void> {
   isNewChatsOnly = false
   stuck = 'no'
   waitsForCompact = false
-  await update($, autoCompact, () => (saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : { isOn: false, at: AT_DEFAULT }))
+  const auto: AutoCompact = saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : DEFAULT_AUTO
+  await update($, autoCompact, () => auto)
   await update($, autoAsk, () => null)
   // another chat: what the agent held, noted or asked for belonged to the last one
   await update($, agentTimed, () => EMPTY)
-  if (saved && isTimed(saved)) await ensureTool($)
+  if (isTimed(auto)) await ensureTool($)
   await loadWarm($, id)
 }
 
@@ -914,13 +923,13 @@ async function lifetimeOf($: EngineInterface, limits: readonly Limit[]): Promise
   )
 }
 
-// A chosen 5m or 1h goes in the variable, for the process, from the next request; auto
-// (or warming off) puts back what was there. Once the first response wrote the cache
+// A chosen 5m or 1h goes in the variable, for the process, from the next request,
+// warming on or off; auto puts back what was there. Once the first response wrote the cache
 // its lifetime holds for the session, as cache-warmer has it: a change waits for a new
 // one, and a press says so (`isPressed`)
 async function applyTtl($: EngineInterface, isPressed: boolean): Promise<void> {
   const setting = await read($, warmSetting)
-  const want = setting.isOn && setting.ttl !== 'auto' ? setting.ttl : null
+  const want = setting.ttl !== 'auto' ? setting.ttl : null
   if (want === envSet) return
   const state = await read($, warm)
   if (state.isLocked) {
@@ -1292,10 +1301,14 @@ async function setWarm($: EngineInterface, isOn: boolean): Promise<void> {
   await update($, warm, s => ({ ...s, status: { state: 'waiting' as const } }))
 }
 
-// the lifetime button: auto, 5m, 1h, auto
-async function cycleTtl($: EngineInterface): Promise<void> {
+// the lifetime dropdown in the band's top row: auto, 5m or 1h for this chat, warming
+// on or off
+const TTL_OPTIONS = [{ value: 'auto' }, { value: '5m' }, { value: '1h' }] as const
+async function chooseTtl($: EngineInterface, value: string): Promise<void> {
+  if (!isTtlChoice(value)) return
   const setting = await read($, warmSetting)
-  await saveWarm($, { ...setting, ttl: nextChoice(setting.ttl) })
+  if (setting.ttl === value) return
+  await saveWarm($, { ...setting, ttl: value })
   await applyTtl($, true)
 }
 
@@ -1644,9 +1657,9 @@ export const register: Register = (on, options) => {
   warmUntil = warmUntilOf(options.warmUntil)
 
   // the mod's own tool: no permission prompt stands between the agent and a hold
-  on('tool.check', { tool: 'mcp__usage-quota__compaction' }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
+  on('tool.check', { tool: /^mcp__usage-quota__compaction$/ }, () => ({ decision: 'allow' as const })).catch(() => ({ decision: 'allow' as const }))
 
-  on('tool.call', { tool: 'mcp__usage-quota__compaction' }, async ($, e) => {
+  on('tool.call', { tool: /^mcp__usage-quota__compaction$/ }, async ($, e) => {
     const input = e as unknown as ToolInput & { agentId?: string }
     const auto = await read($, autoCompact)
     const before = await read($, agentTimed)
@@ -1832,6 +1845,8 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = table
     // the phone's table has no Input: there the % fields are left out
     const Input = 'Input' in table ? table.Input : undefined
+    // nor a Select: there the lifetime dropdown is left out
+    const Select = 'Select' in table ? table.Select : undefined
     const Svg = e.surface === 'desktop' && 'Svg' in table ? table.Svg : undefined
     usePalette(e.surface === 'desktop' && (await read($, theme)) === 'light' ? LIGHT : DARK)
     const width = Math.max(20, e.props.bodyColumns)
@@ -1889,8 +1904,8 @@ export const register: Register = (on, options) => {
     // on a row of their own beneath it
     // (the desktop's letters are narrower than its cells: about 0.8 of one)
     // (the Agent-timed switch and its name add 14 cells, its "from" and field 10 more;
-    // Keep cache warm's switch and name 18, its lifetime button 5)
-    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0) + 18 + (warmSet.isOn ? 5 : 0)
+    // Keep cache warm's switch and name 18, the lifetime dropdown 12)
+    const CONTROLS = 40 + (auto.isOn ? (timed ? 24 : 14) : 0) + 18 + 12
     // the terminal draws its own hide control ([-]) over the band's top-right
     // corner: the first row keeps clear of it
     const HOST_HIDE = Svg ? 0 : 4
@@ -1974,11 +1989,11 @@ export const register: Register = (on, options) => {
         {auto.isOn ? switchOf('timed', 'Agent-timed', timed, () => void setTimed($, !timed)) : null}
         {auto.isOn ? <Text color={timed ? undefined : MUTED}>{timed ? 'Agent-timed from' : 'Agent-timed'}</Text> : null}
         {timed ? fieldOf('startAt', `startAt${startTickNow}`, drawnStart) : null}
-        {/* Keep cache warm, on its own (Auto compact's state has no say): its switch,
-            and while on, the lifetime it keeps the cache for, pressed round */}
+        {/* Keep cache warm, on its own (Auto compact's state has no say): its switch;
+            then the cache lifetime for this chat, a dropdown, warming on or off */}
         {switchOf('warm', 'Keep cache warm', warmSet.isOn, () => void setWarm($, !warmSet.isOn))}
         <Text color={warmSet.isOn ? undefined : MUTED}>Keep cache warm</Text>
-        {warmSet.isOn ? <Button key="warmTtl" label={warmSet.ttl} onPress={() => void cycleTtl($)} /> : null}
+        {Select ? <Select key="cacheTtl" label="Cache" options={TTL_OPTIONS} value={warmSet.ttl} onSelect={value => void chooseTtl($, value)} /> : null}
         {/* a wide gap, so the fields read as the switches', not Compact's */}
         <Box key="compactBox" marginLeft={isHeadBeside ? 2 : 0}>
           <Button key="compact" label="Compact" hover={{ backgroundColor: COMPACT_LIT }} onPress={() => compactNow($)} />

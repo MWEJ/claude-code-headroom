@@ -6,7 +6,7 @@ import {
 } from '../hooks/agent-policy'
 import type { DecideInput, ToolContext } from '../hooks/agent-policy'
 
-const HOLD = { reason: 'mid-refactor of auth', since: 1_000 }
+const HOLD = { reason: 'mid-refactor of auth', since: 1_000, remindAt: 301_000 }
 const TOLD = { hold: null, isAsked: false, told: 'yes' as const }
 const BASE: DecideInput = {
   percent: 40, cap: 80, startAt: 30, isAgentTimed: true, isPaused: false, stuck: 'no', state: TOLD, hasRunningAgents: false,
@@ -145,10 +145,10 @@ test('the tool: hold needs a reason, keeps its start time, and cuts a very long 
     expect(refused.text).toBe(`A hold needs a reason: action "hold", reason "<what is fragile>". Nothing changed.${TAIL}`)
   }
   const held = answerTool(EMPTY, { action: 'hold', reason: '  mid-refactor of auth ' }, CTX)
-  expect(held.state.hold).toEqual({ reason: 'mid-refactor of auth', since: 61_000 })
+  expect(held.state.hold).toEqual({ reason: 'mid-refactor of auth', since: 61_000, remindAt: 361_000 })
   expect(held.text).toStartWith('Hold set: compaction waits until you release, or until the cap. Reason: mid-refactor of auth.')
   const again = answerTool(held.state, { action: 'hold', reason: 'tasks 3 to 5' }, { ...CTX, now: 999_000 })
-  expect(again.state.hold).toEqual({ reason: 'tasks 3 to 5', since: 61_000 })
+  expect(again.state.hold).toEqual({ reason: 'tasks 3 to 5', since: 61_000, remindAt: 1_299_000 })
   expect(again.text).toStartWith('Hold updated')
   const long = answerTool(EMPTY, { action: 'hold', reason: 'x'.repeat(10_000) }, CTX)
   expect(long.state.hold?.reason).toHaveLength(REASON_MAX)

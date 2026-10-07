@@ -28,6 +28,8 @@ export const AT_DEFAULT = 80
 // the start %: 10 at the least, always below the cap; 30 where none was set
 export const START_MIN = 10
 export const START_DEFAULT = 30
+// a chat that never had a setting: Auto compact on at the cap, Agent-timed on from the start %
+export const DEFAULT_AUTO: AutoCompact = { isOn: true, at: AT_DEFAULT, isAgentTimed: true, startAt: START_DEFAULT }
 export const NOTE_MAX = 4_000
 // a reason is kept to this, and drawn in the band to less
 export const REASON_MAX = 500
@@ -38,6 +40,8 @@ export const ASK_MIN = 10
 export const NEAR_CAP = 5
 // main tool calls between repeats of that last warning
 export const NUDGE_EVERY = 10
+// while a hold lasts, the agent is asked this often to say where the hold stands
+export const HOLD_REMIND_MS = 5 * 60_000
 
 export const EMPTY: AgentTimed = {
   hold: null,
@@ -160,6 +164,19 @@ export function nudgeText(level: 2 | 3, percent: number, startAt: number, cap: n
   return `Agent-timed compaction: ${body}\n${figures(percent, startAt, cap)}`
 }
 
+// Every HOLD_REMIND_MS of a hold, on the next main tool result: the agent is asked to
+// say where the hold stands (kept, released, or a note). `null` while none is due; the
+// state handed back is due again HOLD_REMIND_MS on.
+export function holdReminder(state: AgentTimed, now: number, percent: number, startAt: number, cap: number): { text: string; state: AgentTimed } | null {
+  if (!state.hold || now < state.hold.remindAt) return null
+  const held = Math.max(1, Math.round((now - state.hold.since) / 60_000))
+  const text =
+    `Agent-timed compaction: you have held compaction for ${held}m (${state.hold.reason}). ` +
+    'Update the hold: call the compaction tool with action "hold" and the current reason to keep it, "release" if the fragile step is done, or "note" what must survive.\n' +
+    figures(percent, startAt, cap)
+  return { text, state: { ...state, hold: { ...state.hold, remindAt: now + HOLD_REMIND_MS } } }
+}
+
 export function breakpointText(kind: 'commit' | 'tests'): string {
   const what = kind === 'commit' ? 'a commit just landed' : 'tests just passed'
   return `Agent-timed compaction: ${what}, a natural breakpoint. Consider "release" or "compact", with a note.`
@@ -224,7 +241,7 @@ export function answerTool(state: AgentTimed, input: ToolInput, ctx: ToolContext
   if (action === 'hold') {
     const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, REASON_MAX) : ''
     if (reason === '') return say('A hold needs a reason: action "hold", reason "<what is fragile>". Nothing changed.')
-    const hold = { reason, since: state.hold?.since ?? ctx.now }
+    const hold = { reason, since: state.hold?.since ?? ctx.now, remindAt: ctx.now + HOLD_REMIND_MS }
     return say(`${state.hold ? 'Hold updated' : 'Hold set'}: compaction waits until you release, or until the cap. Reason: ${reason}.`, {
       ...state,
       hold,

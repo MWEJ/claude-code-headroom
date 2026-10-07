@@ -27,7 +27,7 @@ export type AutoCompact = { isOn: boolean; at: number | null; isAgentTimed?: boo
 /** what Agent-timed holds for the session; every compaction of the main conversation starts it over */
 export type AgentTimed = {
   /** the agent's request to defer compaction below the cap */
-  hold: { reason: string; since: number } | null
+  hold: { reason: string; since: number; remindAt: number } | null
   /** the handoff note: to the summarizer, back to the agent, then cleared */
   note: string | null
   /** the agent asked to compact when this turn ends */
